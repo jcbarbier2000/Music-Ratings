@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X } from 'lucide-react'
+import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X, Image } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './hooks/useAuth'
 import Login from './components/Login'
 import StarRating from './components/StarRating'
 import AlbumChart from './components/AlbumChart'
 import ImportModal from './components/ImportModal'
+import ImageUpload from './components/ImageUpload'
 
 export default function App() {
   const { user, profile, isAdmin, loading, signIn, signUp, signOut } = useAuth()
@@ -15,7 +16,7 @@ export default function App() {
   const [artistDetail, setArtistDetail] = useState(null)
   const [userRatings, setUserRatings] = useState({})
   const [adminRatings, setAdminRatings] = useState({})
-  const [adminProfile, setAdminProfile] = useState(undefined) // undefined = not loaded yet
+  const [adminProfile, setAdminProfile] = useState(undefined)
   const [search, setSearch] = useState('')
   const [dataLoading, setDataLoading] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -23,20 +24,17 @@ export default function App() {
   const [showEditArtist, setShowEditArtist] = useState(false)
   const [editGenre, setEditGenre] = useState('')
   const [editSubgenre, setEditSubgenre] = useState('')
+  const [editImageUrl, setEditImageUrl] = useState('')
   const [newAlbumName, setNewAlbumName] = useState('')
   const [newAlbumYear, setNewAlbumYear] = useState('')
+  const [newAlbumImageUrl, setNewAlbumImageUrl] = useState('')
   const [newSongs, setNewSongs] = useState('')
 
-  // Fetch admin profile for showing their ratings to other users
   useEffect(() => {
     supabase.from('profiles').select('*').eq('is_admin', true).limit(1).single()
-      .then(({ data, error }) => {
-        if (error) console.error('Error fetching admin profile:', error)
-        setAdminProfile(data || null) // null = loaded but not found
-      })
+      .then(({ data }) => setAdminProfile(data || null))
   }, [])
 
-  // Load artists list
   const loadArtists = useCallback(async () => {
     const { data } = await supabase
       .from('artists')
@@ -47,7 +45,6 @@ export default function App() {
 
   useEffect(() => { if (user) loadArtists() }, [user, loadArtists])
 
-  // Load full artist detail (albums + songs + ratings)
   const loadArtistDetail = useCallback(async (artist) => {
     setDataLoading(true)
     const { data: albums } = await supabase
@@ -65,7 +62,6 @@ export default function App() {
 
     const songIds = sorted.flatMap(a => a.songs.map(s => s.id))
     if (songIds.length && user) {
-      // Load current user's ratings
       const { data: ur } = await supabase
         .from('ratings')
         .select('song_id, rating')
@@ -75,8 +71,6 @@ export default function App() {
       ;(ur || []).forEach(r => { map[r.song_id] = r.rating })
       setUserRatings(map)
 
-      // Load admin ratings for non-admin users
-      // adminProfile.id !== user.id ensures admin doesn't see their own ratings doubled
       if (adminProfile?.id && adminProfile.id !== user.id) {
         const { data: ar } = await supabase
           .from('ratings')
@@ -93,7 +87,6 @@ export default function App() {
     setDataLoading(false)
   }, [user, adminProfile])
 
-  // Re-run loadArtistDetail when adminProfile finishes loading
   useEffect(() => {
     if (selectedArtist && adminProfile !== undefined) {
       loadArtistDetail(selectedArtist)
@@ -112,12 +105,15 @@ export default function App() {
   }
 
   const saveArtistEdit = async () => {
-    await supabase.from('artists').update({
+    const updates = {
       genre: editGenre || null,
-      subgenre: editSubgenre || null
-    }).eq('id', selectedArtist.id)
-    setSelectedArtist(prev => ({ ...prev, genre: editGenre, subgenre: editSubgenre }))
-    await loadArtists()
+      subgenre: editSubgenre || null,
+      image_url: editImageUrl || null,
+    }
+    await supabase.from('artists').update(updates).eq('id', selectedArtist.id)
+    const updated = { ...selectedArtist, ...updates }
+    setSelectedArtist(updated)
+    setArtists(prev => prev.map(a => a.id === selectedArtist.id ? updated : a))
     setShowEditArtist(false)
   }
 
@@ -131,14 +127,19 @@ export default function App() {
     if (!newAlbumName.trim() || !newSongs.trim()) return
     const { data: alb } = await supabase
       .from('albums')
-      .insert({ artist_id: selectedArtist.id, name: newAlbumName.trim(), year: newAlbumYear.trim() || null })
+      .insert({
+        artist_id: selectedArtist.id,
+        name: newAlbumName.trim(),
+        year: newAlbumYear.trim() || null,
+        image_url: newAlbumImageUrl || null,
+      })
       .select().single()
     if (!alb) return
     const songs = newSongs.split('\n').filter(s => s.trim()).map((s, i) => ({
       album_id: alb.id, name: s.trim(), track_order: i
     }))
     await supabase.from('songs').insert(songs)
-    setNewAlbumName(''); setNewAlbumYear(''); setNewSongs('')
+    setNewAlbumName(''); setNewAlbumYear(''); setNewSongs(''); setNewAlbumImageUrl('')
     setShowAddAlbum(false)
     loadArtistDetail(selectedArtist)
   }
@@ -191,8 +192,7 @@ export default function App() {
                 <span className="text-xs bg-violet-600 text-white px-1.5 py-0.5 rounded font-medium">Admin</span>
               )}
             </div>
-            <button onClick={signOut}
-              className="p-1.5 text-zinc-500 hover:text-white transition-colors">
+            <button onClick={signOut} className="p-1.5 text-zinc-500 hover:text-white transition-colors">
               <LogOut className="w-4 h-4" />
             </button>
           </div>
@@ -200,24 +200,21 @@ export default function App() {
       </nav>
 
       <main className="max-w-6xl mx-auto px-4 py-8">
+
         {/* HOME PAGE */}
         {page === 'home' && (
           <div className="space-y-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold text-white">Collection</h1>
-                <p className="text-zinc-500 text-sm mt-1">
-                  {artists.length} artists
-                </p>
+                <p className="text-zinc-500 text-sm mt-1">{artists.length} artists</p>
               </div>
               {isAdmin && (
-                <div className="flex gap-2">
-                  <button onClick={() => setShowImport(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors">
-                    <Upload className="w-4 h-4" />
-                    Import CSV
-                  </button>
-                </div>
+                <button onClick={() => setShowImport(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors">
+                  <Upload className="w-4 h-4" />
+                  Import CSV
+                </button>
               )}
             </div>
 
@@ -227,7 +224,7 @@ export default function App() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search artists, genres..."
-                className="w-full pl-11 pr-4 py-3 bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                className="w-full pl-11 pr-4 py-3 bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
             </div>
 
@@ -248,21 +245,30 @@ export default function App() {
               </div>
             )}
 
+            {/* Artist grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {filtered.map(artist => (
                 <button key={artist.id}
                   onClick={() => { setSelectedArtist(artist); setPage('artist') }}
-                  className="bg-zinc-900 border border-zinc-800 hover:border-violet-500/60 rounded-2xl p-5 text-left transition-all group">
-                  <div className="flex items-center gap-4 mb-3">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600/20 to-indigo-600/20 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
-                      <Music className="w-5 h-5 text-violet-400" />
-                    </div>
+                  className="bg-zinc-900 border border-zinc-800 hover:border-violet-500/60 rounded-2xl p-4 text-left transition-all group">
+                  <div className="flex items-center gap-4">
+                    {artist.image_url ? (
+                      <img
+                        src={artist.image_url}
+                        alt={artist.name}
+                        className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-zinc-700"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-600/20 to-indigo-600/20 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
+                        <Music className="w-6 h-6 text-violet-400" />
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <div className="font-semibold text-white group-hover:text-violet-300 transition-colors truncate">
                         {artist.name}
                       </div>
                       {artist.genre && (
-                        <div className="text-xs text-zinc-500 truncate">
+                        <div className="text-xs text-zinc-500 truncate mt-0.5">
                           {artist.genre}{artist.subgenre ? ` · ${artist.subgenre}` : ''}
                         </div>
                       )}
@@ -290,12 +296,21 @@ export default function App() {
               All Artists
             </button>
 
+            {/* Artist header */}
             <div className="bg-gradient-to-br from-violet-900/40 to-indigo-900/20 border border-violet-800/30 rounded-2xl p-8">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-5">
-                  <div className="w-20 h-20 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
-                    <Music className="w-10 h-10 text-violet-400" />
-                  </div>
+                  {selectedArtist.image_url ? (
+                    <img
+                      src={selectedArtist.image_url}
+                      alt={selectedArtist.name}
+                      className="w-24 h-24 rounded-2xl object-cover border border-violet-500/30 flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-24 h-24 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
+                      <Music className="w-12 h-12 text-violet-400" />
+                    </div>
+                  )}
                   <div>
                     <h1 className="text-4xl font-bold text-white">{selectedArtist.name}</h1>
                     {(selectedArtist.genre || selectedArtist.subgenre) && (
@@ -319,6 +334,7 @@ export default function App() {
                   <button onClick={() => {
                     setEditGenre(selectedArtist.genre || '')
                     setEditSubgenre(selectedArtist.subgenre || '')
+                    setEditImageUrl(selectedArtist.image_url || '')
                     setShowEditArtist(true)
                   }}
                     className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-xl transition-colors flex-shrink-0">
@@ -334,6 +350,7 @@ export default function App() {
                 userRatings={userRatings}
                 adminRatings={adminRatings}
                 isAdmin={isAdmin}
+                adminName={adminProfile?.username}
               />
             )}
 
@@ -358,7 +375,18 @@ export default function App() {
                   return (
                     <div key={album.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
                       <div className="bg-zinc-800/50 px-6 py-4 flex items-center justify-between gap-4 border-b border-zinc-800">
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-4 min-w-0">
+                          {album.image_url ? (
+                            <img
+                              src={album.image_url}
+                              alt={album.name}
+                              className="w-14 h-14 rounded-xl object-cover border border-zinc-700 flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-xl bg-zinc-700/50 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+                              <Disc className="w-6 h-6 text-zinc-500" />
+                            </div>
+                          )}
                           <div className="min-w-0">
                             <div className="flex items-center gap-3 flex-wrap">
                               <h3 className="font-bold text-white">{album.name}</h3>
@@ -390,12 +418,9 @@ export default function App() {
                         {album.songs.map((song, idx) => {
                           const uRating = userRatings[song.id] || 0
                           const aRating = adminRatings[song.id] || 0
-
                           return (
                             <div key={song.id} className="px-6 py-3.5 flex items-center gap-4 hover:bg-zinc-800/30 transition-colors">
-                              <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0">
-                                {idx + 1}
-                              </span>
+                              <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0">{idx + 1}</span>
                               <span className="text-zinc-200 text-sm flex-1 truncate">{song.name}</span>
                               <div className="flex items-center gap-4 flex-shrink-0">
                                 {!isAdmin && aRating > 0 && (
@@ -408,11 +433,7 @@ export default function App() {
                                   {!isAdmin && aRating > 0 && (
                                     <span className="text-xs text-zinc-600 mb-1">You</span>
                                   )}
-                                  <StarRating
-                                    rating={uRating}
-                                    onRate={r => rate(song.id, r)}
-                                    size="sm"
-                                  />
+                                  <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
                                 </div>
                               </div>
                             </div>
@@ -437,18 +458,16 @@ export default function App() {
 
       {/* Modals */}
       {showImport && (
-        <ImportModal
-          onClose={() => setShowImport(false)}
-          onImported={loadArtists}
-        />
+        <ImportModal onClose={() => setShowImport(false)} onImported={loadArtists} />
       )}
 
+      {/* Add Album */}
       {showAddAlbum && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
               <h2 className="text-xl font-bold text-white">Add Album</h2>
-              <button onClick={() => { setShowAddAlbum(false); setNewAlbumName(''); setNewAlbumYear(''); setNewSongs('') }}
+              <button onClick={() => { setShowAddAlbum(false); setNewAlbumName(''); setNewAlbumYear(''); setNewSongs(''); setNewAlbumImageUrl('') }}
                 className="p-2 hover:bg-zinc-800 rounded-lg transition-colors">
                 <X className="w-5 h-5 text-zinc-400" />
               </button>
@@ -466,6 +485,12 @@ export default function App() {
                   placeholder="e.g. 1997"
                   className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
+              <ImageUpload
+                bucket="album-images"
+                existingUrl={newAlbumImageUrl}
+                onUpload={url => setNewAlbumImageUrl(url || '')}
+                label="Album Cover"
+              />
               <div>
                 <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">Songs (one per line)</label>
                 <textarea value={newSongs} onChange={e => setNewSongs(e.target.value)}
@@ -478,7 +503,7 @@ export default function App() {
                   className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl transition-colors">
                   Add Album
                 </button>
-                <button onClick={() => { setShowAddAlbum(false); setNewAlbumName(''); setNewAlbumYear(''); setNewSongs('') }}
+                <button onClick={() => { setShowAddAlbum(false); setNewAlbumName(''); setNewAlbumYear(''); setNewSongs(''); setNewAlbumImageUrl('') }}
                   className="px-6 py-3 border border-zinc-700 text-zinc-300 rounded-xl hover:bg-zinc-800 transition-colors">
                   Cancel
                 </button>
@@ -488,6 +513,7 @@ export default function App() {
         </div>
       )}
 
+      {/* Edit Artist */}
       {showEditArtist && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full">
@@ -499,6 +525,12 @@ export default function App() {
               </button>
             </div>
             <div className="p-6 space-y-4">
+              <ImageUpload
+                bucket="artist-images"
+                existingUrl={editImageUrl}
+                onUpload={url => setEditImageUrl(url || '')}
+                label="Artist Photo"
+              />
               <div>
                 <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">Genre</label>
                 <input value={editGenre} onChange={e => setEditGenre(e.target.value)}
