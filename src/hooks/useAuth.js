@@ -23,12 +23,25 @@ export function useAuth() {
   }, [])
 
   const fetchProfile = async (userId) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    setProfile(data)
+    for (let i = 0; i < 3; i++) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (error) {
+        console.error('Profile fetch error:', error)
+        await new Promise(r => setTimeout(r, 500))
+        continue
+      }
+
+      if (data) {
+        setProfile(data)
+        setLoading(false)
+        return
+      }
+    }
     setLoading(false)
   }
 
