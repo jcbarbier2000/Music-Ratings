@@ -9,13 +9,13 @@ import ImportModal from './components/ImportModal'
 
 export default function App() {
   const { user, profile, isAdmin, loading, signIn, signUp, signOut } = useAuth()
-  const [page, setPage] = useState('home') // 'home' | 'artist'
+  const [page, setPage] = useState('home')
   const [artists, setArtists] = useState([])
   const [selectedArtist, setSelectedArtist] = useState(null)
-  const [artistDetail, setArtistDetail] = useState(null) // { albums: [...] }
-  const [userRatings, setUserRatings] = useState({}) // songId -> rating
-  const [adminRatings, setAdminRatings] = useState({}) // songId -> rating
-  const [adminProfile, setAdminProfile] = useState(null)
+  const [artistDetail, setArtistDetail] = useState(null)
+  const [userRatings, setUserRatings] = useState({})
+  const [adminRatings, setAdminRatings] = useState({})
+  const [adminProfile, setAdminProfile] = useState(undefined) // undefined = not loaded yet
   const [search, setSearch] = useState('')
   const [dataLoading, setDataLoading] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -27,10 +27,13 @@ export default function App() {
   const [newAlbumYear, setNewAlbumYear] = useState('')
   const [newSongs, setNewSongs] = useState('')
 
-  // Fetch admin profile for showing their ratings
+  // Fetch admin profile for showing their ratings to other users
   useEffect(() => {
     supabase.from('profiles').select('*').eq('is_admin', true).limit(1).single()
-      .then(({ data }) => setAdminProfile(data))
+      .then(({ data, error }) => {
+        if (error) console.error('Error fetching admin profile:', error)
+        setAdminProfile(data || null) // null = loaded but not found
+      })
   }, [])
 
   // Load artists list
@@ -53,7 +56,6 @@ export default function App() {
       .eq('artist_id', artist.id)
       .order('year', { ascending: true, nullsFirst: false })
 
-    // sort songs by track_order
     const sorted = (albums || []).map(a => ({
       ...a,
       songs: [...(a.songs || [])].sort((x, y) => x.track_order - y.track_order)
@@ -61,9 +63,9 @@ export default function App() {
 
     setArtistDetail({ albums: sorted })
 
-    // Load user ratings
     const songIds = sorted.flatMap(a => a.songs.map(s => s.id))
     if (songIds.length && user) {
+      // Load current user's ratings
       const { data: ur } = await supabase
         .from('ratings')
         .select('song_id, rating')
@@ -73,8 +75,9 @@ export default function App() {
       ;(ur || []).forEach(r => { map[r.song_id] = r.rating })
       setUserRatings(map)
 
-      // Load admin ratings if admin exists and user isn't admin
-      if (adminProfile && adminProfile.id !== user.id) {
+      // Load admin ratings for non-admin users
+      // adminProfile.id !== user.id ensures admin doesn't see their own ratings doubled
+      if (adminProfile?.id && adminProfile.id !== user.id) {
         const { data: ar } = await supabase
           .from('ratings')
           .select('song_id, rating')
@@ -83,14 +86,19 @@ export default function App() {
         const amap = {}
         ;(ar || []).forEach(r => { amap[r.song_id] = r.rating })
         setAdminRatings(amap)
+      } else {
+        setAdminRatings({})
       }
     }
     setDataLoading(false)
   }, [user, adminProfile])
 
+  // Re-run loadArtistDetail when adminProfile finishes loading
   useEffect(() => {
-    if (selectedArtist) loadArtistDetail(selectedArtist)
-  }, [selectedArtist, loadArtistDetail])
+    if (selectedArtist && adminProfile !== undefined) {
+      loadArtistDetail(selectedArtist)
+    }
+  }, [selectedArtist, loadArtistDetail, adminProfile])
 
   const rate = async (songId, rating) => {
     setUserRatings(prev => ({ ...prev, [songId]: rating }))
@@ -195,12 +203,11 @@ export default function App() {
         {/* HOME PAGE */}
         {page === 'home' && (
           <div className="space-y-8">
-            {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold text-white">Collection</h1>
                 <p className="text-zinc-500 text-sm mt-1">
-                  {artists.length} artists · {artists.reduce((s, a) => s + (a.album_count || 0), 0)} albums
+                  {artists.length} artists
                 </p>
               </div>
               {isAdmin && (
@@ -214,7 +221,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Search */}
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
               <input
@@ -225,7 +231,6 @@ export default function App() {
               />
             </div>
 
-            {/* Genre stats */}
             {Object.keys(genreStats).length > 0 && (
               <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
                 <div className="flex items-center gap-2 mb-4">
@@ -243,7 +248,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Artist grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {filtered.map(artist => (
                 <button key={artist.id}
@@ -280,14 +284,12 @@ export default function App() {
         {/* ARTIST PAGE */}
         {page === 'artist' && selectedArtist && (
           <div className="space-y-6">
-            {/* Back */}
             <button onClick={() => { setPage('home'); setSelectedArtist(null); setArtistDetail(null) }}
               className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors text-sm">
               <ChevronLeft className="w-4 h-4" />
               All Artists
             </button>
 
-            {/* Artist header */}
             <div className="bg-gradient-to-br from-violet-900/40 to-indigo-900/20 border border-violet-800/30 rounded-2xl p-8">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-5">
@@ -326,7 +328,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Chart */}
             {artistDetail && (
               <AlbumChart
                 albums={artistDetail.albums}
@@ -336,7 +337,6 @@ export default function App() {
               />
             )}
 
-            {/* Add album button */}
             {isAdmin && (
               <div className="flex justify-end">
                 <button onClick={() => setShowAddAlbum(true)}
@@ -347,7 +347,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Albums */}
             {dataLoading ? (
               <div className="text-center py-12 text-zinc-600">Loading...</div>
             ) : (
@@ -358,7 +357,6 @@ export default function App() {
 
                   return (
                     <div key={album.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-                      {/* Album header */}
                       <div className="bg-zinc-800/50 px-6 py-4 flex items-center justify-between gap-4 border-b border-zinc-800">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="min-w-0">
@@ -371,7 +369,7 @@ export default function App() {
                               )}
                               {aAvg && (
                                 <span className="px-2.5 py-0.5 bg-violet-900/80 text-violet-300 text-xs font-medium rounded-full">
-                                  Admin {aAvg}
+                                  {adminProfile?.username || 'Admin'} {aAvg}
                                 </span>
                               )}
                             </div>
@@ -388,7 +386,6 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Songs */}
                       <div className="divide-y divide-zinc-800/60">
                         {album.songs.map((song, idx) => {
                           const uRating = userRatings[song.id] || 0
@@ -403,7 +400,7 @@ export default function App() {
                               <div className="flex items-center gap-4 flex-shrink-0">
                                 {!isAdmin && aRating > 0 && (
                                   <div className="flex flex-col items-end">
-                                    <span className="text-xs text-zinc-600 mb-1">Admin</span>
+                                    <span className="text-xs text-zinc-600 mb-1">{adminProfile?.username || 'Admin'}</span>
                                     <StarRating rating={aRating} readonly size="sm" />
                                   </div>
                                 )}
@@ -438,9 +435,7 @@ export default function App() {
         )}
       </main>
 
-      {/* ── Modals ── */}
-
-      {/* Import */}
+      {/* Modals */}
       {showImport && (
         <ImportModal
           onClose={() => setShowImport(false)}
@@ -448,7 +443,6 @@ export default function App() {
         />
       )}
 
-      {/* Add Album */}
       {showAddAlbum && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
@@ -494,7 +488,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Edit Artist */}
       {showEditArtist && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full">
