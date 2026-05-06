@@ -106,7 +106,7 @@ export default function AlbumChart({ albums, userRatings, adminRatings, isAdmin,
         {!isAdmin && points.some(p => p.admin !== null) && (
           <div className="flex items-center gap-2">
             <div className="w-4 h-0.5 bg-violet-600 rounded opacity-60" style={{ borderTop: '2px dashed #7c3aed' }} />
-            <span className="text-xs text-zinc-500">Admin ratings</span>
+            <span className="text-xs text-zinc-500">James' ratings</span>
           </div>
         )}
       </div>
