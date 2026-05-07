@@ -10,11 +10,7 @@ import ImageUpload from './components/ImageUpload'
 import ResetPassword from './components/ResetPassword'
 
 export default function App() {
-  // Handle password reset redirect
-  if (window.location.pathname === '/reset-password') {
-    return <ResetPassword />
-  }
-  const { user, profile, isAdmin, loading, signIn, signUp, signOut } = useAuth()
+  const { user, profile, isAdmin, loading, signIn, signUp, signOut, resetPassword } = useAuth()
   const [page, setPage] = useState('home')
   const [artists, setArtists] = useState([])
   const [selectedArtist, setSelectedArtist] = useState(null)
@@ -238,6 +234,10 @@ export default function App() {
     (a.genre || '').toLowerCase().includes(search.toLowerCase()) ||
     (a.subgenre || '').toLowerCase().includes(search.toLowerCase())
   )
+
+  if (window.location.pathname === '/reset-password') {
+    return <ResetPassword />
+  }
 
   if (loading) {
     return (
