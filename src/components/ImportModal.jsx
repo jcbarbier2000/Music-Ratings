@@ -14,10 +14,39 @@ export default function ImportModal({ onClose, onImported }) {
   const [adminRatings, setAdminRatings] = useState({}) // albumName -> [{ song, rating }]
 
   const parseCSV = text => {
-    return text.split('\n')
-      .map(line => line.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
-      .filter(row => row.some(c => c))
+  const rows = []
+  const lines = text.split('\n')
+  
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const cells = []
+    let current = ''
+    let inQuotes = false
+    
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      
+      if (ch === '"') {
+        // Handle escaped double quotes ""
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"'
+          i++ // skip next quote
+        } else {
+          inQuotes = !inQuotes
+        }
+      } else if (ch === ',' && !inQuotes) {
+        cells.push(current.trim())
+        current = ''
+      } else {
+        current += ch
+      }
+    }
+    cells.push(current.trim())
+    rows.push(cells)
   }
+  
+  return rows
+}
 
   const handleFile = e => {
     const file = e.target.files[0]
