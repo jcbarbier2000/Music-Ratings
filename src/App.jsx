@@ -193,6 +193,9 @@ export default function App() {
     return acc
   }, {})
 
+  const NON_ALBUM_LABELS = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
+  const albumCount = (albums) => (albums || []).filter(a => !NON_ALBUM_LABELS.includes(a.name.toLowerCase().trim())).length
+
   const filtered = artists.filter(a =>
     a.name.toLowerCase().includes(search.toLowerCase()) ||
     (a.genre || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -346,7 +349,7 @@ export default function App() {
                       <p className="text-zinc-400 text-sm mt-0.5">Est. {selectedArtist.debut_year}</p>
                     )}
                     <div className="flex gap-4 mt-2 text-sm text-zinc-500">
-                      <span className="flex items-center gap-1"><Disc className="w-3.5 h-3.5" />{artistDetail?.albums.length || 0} albums</span>
+                      <span className="flex items-center gap-1"><Disc className="w-3.5 h-3.5" />{albumCount(artistDetail?.albums)} albums</span>
                       <span className="flex items-center gap-1"><ListMusic className="w-3.5 h-3.5" />{artistDetail?.albums.reduce((s, a) => s + a.songs.length, 0) || 0} songs</span>
                     </div>
                   </div>
