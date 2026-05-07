@@ -31,7 +31,6 @@ export function useAuth() {
         .single()
 
       if (error) {
-        console.error('Profile fetch error:', error)
         await new Promise(r => setTimeout(r, 500))
         continue
       }
@@ -45,8 +44,7 @@ export function useAuth() {
     setLoading(false)
   }
 
-  const signUp = async (username, password) => {
-    const email = `${username.toLowerCase()}@musicratings.app`
+  const signUp = async (username, email, password) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -56,11 +54,17 @@ export function useAuth() {
     return data
   }
 
-  const signIn = async (username, password) => {
-    const email = `${username.toLowerCase()}@musicratings.app`
+  const signIn = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
     return data
+  }
+
+  const resetPassword = async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`
+    })
+    if (error) throw error
   }
 
   const signOut = () => supabase.auth.signOut()
@@ -72,6 +76,7 @@ export function useAuth() {
     loading,
     signUp,
     signIn,
+    resetPassword,
     signOut,
     refetchProfile: () => user && fetchProfile(user.id),
   }
