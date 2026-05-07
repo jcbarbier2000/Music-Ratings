@@ -137,6 +137,8 @@ export default function App() {
   useEffect(() => {
     if (user && adminProfile) loadStats()
   }, [user, adminProfile, loadStats])
+
+  const loadArtists = useCallback(async () => {
     const { data } = await supabase.from('artists').select('*').order('name')
     setArtists(data || [])
   }, [])
