@@ -117,7 +117,10 @@ export default function App() {
       songs: [...(a.songs || [])].sort((x, y) => x.track_order - y.track_order)
     }))
     setArtistDetail({ albums: sorted })
-    setCollapsedAlbums({}) // reset on new artist
+    // Collapse all albums by default
+    const collapsed = {}
+    sorted.forEach(a => { collapsed[a.id] = true })
+    setCollapsedAlbums(collapsed)
 
     const songIds = sorted.flatMap(a => a.songs.map(s => s.id))
     if (songIds.length && user) {
