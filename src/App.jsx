@@ -64,24 +64,35 @@ export default function App() {
 
   const expandAll = () => setCollapsedAlbums({})
 
-  // Sync page state to URL
+  const slugify = (name) =>
+    name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
+  // Store the intended slug from the URL on initial load
+  const pendingSlugRef = useRef(
+    window.location.pathname.match(/^\/artist\/(.+)$/)?.[1] || null
+  )
+
+  // Sync page state to URL — but only if we're not mid-restore
   useEffect(() => {
+    if (pendingSlugRef.current) return // don't overwrite URL while restoring
     if (page === 'artist' && selectedArtist) {
-      window.history.replaceState(null, '', `/artist/${selectedArtist.id}`)
+      window.history.replaceState(null, '', `/artist/${slugify(selectedArtist.name)}`)
     } else {
       window.history.replaceState(null, '', '/')
     }
   }, [page, selectedArtist])
 
-  // Restore page from URL on load
+  // Restore page from URL once artists are loaded
   useEffect(() => {
-    const match = window.location.pathname.match(/^\/artist\/(.+)$/)
-    if (match && artists.length > 0) {
-      const artist = artists.find(a => a.id === match[1])
-      if (artist) {
-        setSelectedArtist(artist)
-        setPage('artist')
-      }
+    if (!pendingSlugRef.current || artists.length === 0) return
+    const slug = pendingSlugRef.current
+    const artist = artists.find(a => slugify(a.name) === slug)
+    if (artist) {
+      pendingSlugRef.current = null // clear so URL sync works normally after
+      setSelectedArtist(artist)
+      setPage('artist')
+    } else {
+      pendingSlugRef.current = null // slug not found, go home
     }
   }, [artists])
 
