@@ -109,29 +109,71 @@ export default function App() {
   const loadStats = useCallback(async () => {
     if (!user || !adminProfile) return
 
-    // Total albums (excluding non-album labels)
     const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
-    const { data: allAlbums } = await supabase.from('albums').select('id, name')
-    const { data: allSongs } = await supabase.from('songs').select('id')
 
-    const totalAlbums = (allAlbums || []).filter(a => !NON.includes(a.name.toLowerCase().trim())).length
-    const totalSongs = (allSongs || []).length
+    // Fetch all albums with their songs and artist info
+    const { data: allAlbums } = await supabase
+      .from('albums')
+      .select('id, name, artist_id, songs(id)')
+    const { data: allArtists } = await supabase
+      .from('artists')
+      .select('id')
 
-    // Admin rated songs
-    const { count: adminRatedSongs } = await supabase
-      .from('ratings').select('*', { count: 'exact', head: true })
-      .eq('user_id', adminProfile.id)
+    const filteredAlbums = (allAlbums || []).filter(a => !NON.includes(a.name.toLowerCase().trim()))
+    const totalAlbums = filteredAlbums.length
+    const totalSongs = filteredAlbums.reduce((sum, a) => sum + a.songs.length, 0)
+    const totalArtists = (allArtists || []).length
 
-    // User rated songs (skip if user is admin)
-    let userRatedSongs = null
-    if (user.id !== adminProfile.id) {
-      const { count } = await supabase
-        .from('ratings').select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-      userRatedSongs = count
+    // All song IDs (from filtered albums only)
+    const allSongIds = filteredAlbums.flatMap(a => a.songs.map(s => s.id))
+
+    const getRatedSongIds = async (userId) => {
+      if (!allSongIds.length) return new Set()
+      const { data } = await supabase
+        .from('ratings')
+        .select('song_id')
+        .eq('user_id', userId)
+        .in('song_id', allSongIds)
+      return new Set((data || []).map(r => r.song_id))
     }
 
-    setStats({ totalAlbums, totalSongs, adminRatedSongs: adminRatedSongs || 0, userRatedSongs })
+    const calcCompletions = (ratedSet) => {
+      // Albums where every song is rated
+      const completedAlbums = filteredAlbums.filter(album =>
+        album.songs.length > 0 && album.songs.every(s => ratedSet.has(s.id))
+      ).length
+
+      // Artists where every song across all their albums is rated
+      const artistAlbumMap = {}
+      filteredAlbums.forEach(album => {
+        if (!artistAlbumMap[album.artist_id]) artistAlbumMap[album.artist_id] = []
+        artistAlbumMap[album.artist_id].push(album)
+      })
+      const completedArtists = Object.values(artistAlbumMap).filter(albums =>
+        albums.every(album => album.songs.length > 0 && album.songs.every(s => ratedSet.has(s.id)))
+      ).length
+
+      const ratedSongs = allSongIds.filter(id => ratedSet.has(id)).length
+
+      return { ratedSongs, completedAlbums, completedArtists }
+    }
+
+    const adminRatedSet = await getRatedSongIds(adminProfile.id)
+    const adminStats = calcCompletions(adminRatedSet)
+
+    let userStats = null
+    if (user.id !== adminProfile.id) {
+      const userRatedSet = await getRatedSongIds(user.id)
+      userStats = calcCompletions(userRatedSet)
+    }
+
+    setStats({
+      totalArtists,
+      totalAlbums,
+      totalSongs,
+      admin: adminStats,
+      user: userStats,
+    })
   }, [user, adminProfile])
 
   useEffect(() => {
@@ -355,51 +397,58 @@ export default function App() {
 
             {/* Stats panel */}
             {stats && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {/* Artists */}
-                <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-                  <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Artists</p>
-                  <p className="text-3xl font-bold text-white">{artists.length}</p>
+              <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-5">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-violet-400" />
+                  <span className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Collection Stats</span>
                 </div>
 
-                {/* Albums */}
-                <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-                  <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Albums</p>
-                  <p className="text-3xl font-bold text-white">{stats.totalAlbums}</p>
-                </div>
-
-                {/* Songs */}
-                <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 col-span-2 sm:col-span-1">
-                  <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Songs</p>
-                  <p className="text-3xl font-bold text-white">{stats.totalSongs}</p>
-                </div>
-
-                {/* Admin rated */}
-                <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-                  <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">{adminProfile?.username} Rated</p>
-                  <div className="flex items-baseline gap-1.5">
-                    <p className="text-3xl font-bold text-violet-400">{stats.adminRatedSongs}</p>
-                    <p className="text-sm text-zinc-600">/ {stats.totalSongs}</p>
-                  </div>
-                  <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-violet-600 rounded-full transition-all"
-                      style={{ width: `${Math.min(100, (stats.adminRatedSongs / stats.totalSongs) * 100)}%` }} />
-                  </div>
-                </div>
-
-                {/* User rated — only shown if user is not admin */}
-                {stats.userRatedSongs !== null && (
-                  <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4">
-                    <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Your Rated</p>
-                    <div className="flex items-baseline gap-1.5">
-                      <p className="text-3xl font-bold text-indigo-400">{stats.userRatedSongs}</p>
-                      <p className="text-sm text-zinc-600">/ {stats.adminRatedSongs}</p>
+                {/* Stat rows */}
+                {[
+                  { label: 'Artists', total: stats.totalArtists, adminVal: stats.admin.completedArtists, userVal: stats.user?.completedArtists },
+                  { label: 'Albums', total: stats.totalAlbums, adminVal: stats.admin.completedAlbums, userVal: stats.user?.completedAlbums },
+                  { label: 'Songs', total: stats.totalSongs, adminVal: stats.admin.ratedSongs, userVal: stats.user?.ratedSongs },
+                ].map(({ label, total, adminVal, userVal }) => (
+                  <div key={label}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm text-zinc-400">{label}</span>
+                      <div className="flex items-center gap-3 text-xs">
+                        {userVal !== undefined && userVal !== null && (
+                          <span className="text-indigo-400 font-medium">
+                            {profile?.username} {userVal}<span className="text-zinc-600">/{adminVal}</span>
+                          </span>
+                        )}
+                        <span className="text-violet-400 font-medium">
+                          {adminProfile?.username} {adminVal}<span className="text-zinc-600">/{total}</span>
+                        </span>
+                      </div>
                     </div>
-                    <div className="mt-2 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-indigo-500 rounded-full transition-all"
-                        style={{ width: `${Math.min(100, (stats.userRatedSongs / Math.max(1, stats.adminRatedSongs)) * 100)}%` }} />
+                    {/* Admin bar */}
+                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-violet-600 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (adminVal / Math.max(1, total)) * 100)}%` }} />
                     </div>
-                    <p className="text-xs text-zinc-600 mt-1">of {adminProfile?.username}'s rated songs</p>
+                    {/* User bar */}
+                    {userVal !== undefined && userVal !== null && (
+                      <div className="h-1.5 bg-zinc-800/50 rounded-full overflow-hidden mt-1">
+                        <div className="h-full bg-indigo-500 rounded-full transition-all"
+                          style={{ width: `${Math.min(100, (userVal / Math.max(1, adminVal)) * 100)}%` }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Legend */}
+                {stats.user && (
+                  <div className="flex gap-4 pt-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-2 bg-violet-600 rounded-sm" />
+                      <span className="text-xs text-zinc-500">{adminProfile?.username}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-1.5 bg-indigo-500 rounded-sm" />
+                      <span className="text-xs text-zinc-500">{profile?.username} (of {adminProfile?.username}'s)</span>
+                    </div>
                   </div>
                 )}
               </div>
