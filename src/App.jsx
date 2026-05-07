@@ -38,6 +38,9 @@ export default function App() {
   const [newSongs, setNewSongs] = useState('')
   const [collapsedAlbums, setCollapsedAlbums] = useState({})
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const [allProfiles, setAllProfiles] = useState([])
+  const [compareProfile, setCompareProfile] = useState(null) // profile to compare against
+  const [compareRatings, setCompareRatings] = useState({})
 
   // Scroll to top button visibility
   useEffect(() => {
@@ -94,7 +97,12 @@ export default function App() {
 
   useEffect(() => {
     supabase.from('profiles').select('*').eq('is_admin', true).limit(1).single()
-      .then(({ data }) => setAdminProfile(data || null))
+      .then(({ data }) => {
+        setAdminProfile(data || null)
+        setCompareProfile(data || null) // default compare to admin
+      })
+    supabase.from('profiles').select('*').order('username')
+      .then(({ data }) => setAllProfiles(data || []))
   }, [])
 
   const loadArtists = useCallback(async () => {
@@ -130,24 +138,37 @@ export default function App() {
       const map = {}
       ;(ur || []).forEach(r => { map[r.song_id] = r.rating })
       setUserRatings(map)
-
-      if (adminProfile?.id && adminProfile.id !== user.id) {
-        const { data: ar } = await supabase
-          .from('ratings').select('song_id, rating')
-          .eq('user_id', adminProfile.id).in('song_id', songIds)
-        const amap = {}
-        ;(ar || []).forEach(r => { amap[r.song_id] = r.rating })
-        setAdminRatings(amap)
-      } else {
-        setAdminRatings({})
-      }
     }
     setDataLoading(false)
-  }, [user, adminProfile])
+  }, [user])
+
+  // Load compare ratings whenever compareProfile or artistDetail changes
+  const loadCompareRatings = useCallback(async (songIds) => {
+    if (!compareProfile || !songIds.length) {
+      setCompareRatings({})
+      return
+    }
+    if (compareProfile.id === user?.id) {
+      setCompareRatings({})
+      return
+    }
+    const { data: cr } = await supabase
+      .from('ratings').select('song_id, rating')
+      .eq('user_id', compareProfile.id).in('song_id', songIds)
+    const cmap = {}
+    ;(cr || []).forEach(r => { cmap[r.song_id] = r.rating })
+    setCompareRatings(cmap)
+  }, [compareProfile, user])
+
+  useEffect(() => {
+    if (!artistDetail) return
+    const songIds = artistDetail.albums.flatMap(a => a.songs.map(s => s.id))
+    loadCompareRatings(songIds)
+  }, [artistDetail, loadCompareRatings])
 
   useEffect(() => {
     if (selectedArtist && adminProfile !== undefined) loadArtistDetail(selectedArtist)
-  }, [selectedArtist, loadArtistDetail, adminProfile])
+  }, [selectedArtist, loadArtistDetail])
 
   const rate = async (songId, rating) => {
     setUserRatings(prev => ({ ...prev, [songId]: rating }))
@@ -410,7 +431,31 @@ export default function App() {
             </div>
 
             {artistDetail && (
-              <AlbumChart albums={artistDetail.albums} userRatings={userRatings} adminRatings={adminRatings} isAdmin={isAdmin} adminName={adminProfile?.username} />
+              <AlbumChart albums={artistDetail.albums} userRatings={userRatings} adminRatings={compareRatings} isAdmin={compareProfile?.id === user?.id} adminName={compareProfile?.username} />
+            )}
+
+            {/* Compare user selector */}
+            {allProfiles.filter(p => p.id !== user?.id).length > 0 && (
+              <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+                <span className="text-xs text-zinc-500 uppercase tracking-widest flex-shrink-0">Compare with</span>
+                <select
+                  value={compareProfile?.id || ''}
+                  onChange={e => {
+                    const p = allProfiles.find(p => p.id === e.target.value) || null
+                    setCompareProfile(p)
+                  }}
+                  className="flex-1 bg-zinc-800 border border-zinc-700 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                >
+                  <option value="">Nobody</option>
+                  {allProfiles
+                    .filter(p => p.id !== user?.id)
+                    .map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.username}{p.is_admin ? ' (Admin)' : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
             )}
 
             {/* Album controls */}
@@ -451,7 +496,7 @@ export default function App() {
               <div className="space-y-3">
                 {artistDetail?.albums.map(album => {
                   const uAvg = albumAvg(album.songs, userRatings)
-                  const aAvg = !isAdmin ? albumAvg(album.songs, adminRatings) : null
+                  const aAvg = compareProfile?.id !== user?.id ? albumAvg(album.songs, compareRatings) : null
                   const isCollapsed = !!collapsedAlbums[album.id]
 
                   return (
@@ -473,7 +518,7 @@ export default function App() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="font-bold text-white text-sm sm:text-base">{album.name}</h3>
                               {uAvg && <span className="px-2 py-0.5 bg-indigo-600 text-white text-xs font-bold rounded-full">{uAvg}</span>}
-                              {aAvg && <span className="px-2 py-0.5 bg-violet-900/80 text-violet-300 text-xs font-medium rounded-full">{adminProfile?.username || 'Admin'} {aAvg}</span>}
+                              {aAvg && <span className="px-2 py-0.5 bg-violet-900/80 text-violet-300 text-xs font-medium rounded-full">{compareProfile?.username || 'Admin'} {aAvg}</span>}
                             </div>
                             <p className="text-xs text-zinc-500 mt-0.5">{album.year ? `${album.year} · ` : ''}{album.songs.length} tracks</p>
                           </div>
@@ -504,7 +549,7 @@ export default function App() {
                         <div className="divide-y divide-zinc-800/60">
                           {album.songs.map((song, idx) => {
                             const uRating = userRatings[song.id] || 0
-                            const aRating = adminRatings[song.id] || 0
+                            const aRating = compareProfile?.id !== user?.id ? (compareRatings[song.id] || 0) : 0
                             return (
                               <div key={song.id} className="px-4 sm:px-6 py-3 hover:bg-zinc-800/30 transition-colors">
                                 <div className="flex items-start gap-3">
@@ -513,28 +558,28 @@ export default function App() {
                                     <span className="text-zinc-200 text-sm block truncate">{song.name}</span>
                                     {/* Mobile: ratings below song name */}
                                     <div className="flex items-center gap-3 mt-1.5 sm:hidden">
-                                      {!isAdmin && aRating > 0 && (
+                                      {aRating > 0 && (
                                         <div className="flex items-center gap-1.5">
-                                          <span className="text-xs text-zinc-600">{adminProfile?.username || 'Admin'}:</span>
+                                          <span className="text-xs text-zinc-600">{compareProfile?.username || 'Admin'}:</span>
                                           <StarRating rating={aRating} readonly size="sm" />
                                         </div>
                                       )}
                                       <div className="flex items-center gap-1.5">
-                                        {!isAdmin && aRating > 0 && <span className="text-xs text-zinc-600">You:</span>}
+                                        {aRating > 0 && <span className="text-xs text-zinc-600">You:</span>}
                                         <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
                                       </div>
                                     </div>
                                   </div>
                                   {/* Desktop: ratings inline */}
                                   <div className="hidden sm:flex items-center gap-4 flex-shrink-0">
-                                    {!isAdmin && aRating > 0 && (
+                                    {aRating > 0 && (
                                       <div className="flex flex-col items-end">
-                                        <span className="text-xs text-zinc-600 mb-1">{adminProfile?.username || 'Admin'}</span>
+                                        <span className="text-xs text-zinc-600 mb-1">{compareProfile?.username || 'Admin'}</span>
                                         <StarRating rating={aRating} readonly size="sm" />
                                       </div>
                                     )}
                                     <div className="flex flex-col items-end">
-                                      {!isAdmin && aRating > 0 && <span className="text-xs text-zinc-600 mb-1">You</span>}
+                                      {aRating > 0 && <span className="text-xs text-zinc-600 mb-1">You</span>}
                                       <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
                                     </div>
                                   </div>
