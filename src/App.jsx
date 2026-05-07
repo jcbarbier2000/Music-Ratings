@@ -7,8 +7,13 @@ import StarRating from './components/StarRating'
 import AlbumChart from './components/AlbumChart'
 import ImportModal from './components/ImportModal'
 import ImageUpload from './components/ImageUpload'
+import ResetPassword from './components/ResetPassword'
 
 export default function App() {
+  // Handle password reset redirect
+  if (window.location.pathname === '/reset-password') {
+    return <ResetPassword />
+  }
   const { user, profile, isAdmin, loading, signIn, signUp, signOut } = useAuth()
   const [page, setPage] = useState('home')
   const [artists, setArtists] = useState([])
@@ -59,6 +64,27 @@ export default function App() {
 
   const expandAll = () => setCollapsedAlbums({})
 
+  // Sync page state to URL
+  useEffect(() => {
+    if (page === 'artist' && selectedArtist) {
+      window.history.replaceState(null, '', `/artist/${selectedArtist.id}`)
+    } else {
+      window.history.replaceState(null, '', '/')
+    }
+  }, [page, selectedArtist])
+
+  // Restore page from URL on load
+  useEffect(() => {
+    const match = window.location.pathname.match(/^\/artist\/(.+)$/)
+    if (match && artists.length > 0) {
+      const artist = artists.find(a => a.id === match[1])
+      if (artist) {
+        setSelectedArtist(artist)
+        setPage('artist')
+      }
+    }
+  }, [artists])
+
   useEffect(() => {
     supabase.from('profiles').select('*').eq('is_admin', true).limit(1).single()
       .then(({ data }) => setAdminProfile(data || null))
@@ -84,10 +110,7 @@ export default function App() {
       songs: [...(a.songs || [])].sort((x, y) => x.track_order - y.track_order)
     }))
     setArtistDetail({ albums: sorted })
-    // Collapse all albums by default
-    const collapsed = {}
-    sorted.forEach(a => { collapsed[a.id] = true })
-    setCollapsedAlbums(collapsed)
+    setCollapsedAlbums({}) // reset on new artist
 
     const songIds = sorted.flatMap(a => a.songs.map(s => s.id))
     if (songIds.length && user) {
@@ -213,7 +236,7 @@ export default function App() {
     )
   }
 
-  if (!user) return <Login onSignIn={signIn} onSignUp={signUp} />
+  if (!user) return <Login onSignIn={signIn} onSignUp={signUp} onResetPassword={resetPassword} />
 
   return (
     <div className="min-h-screen bg-[#080808]">
