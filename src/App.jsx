@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './hooks/useAuth'
 import Login from './components/Login'
@@ -35,6 +35,29 @@ export default function App() {
   const [newAlbumYear, setNewAlbumYear] = useState('')
   const [newAlbumImageUrl, setNewAlbumImageUrl] = useState('')
   const [newSongs, setNewSongs] = useState('')
+  const [collapsedAlbums, setCollapsedAlbums] = useState({})
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  // Scroll to top button visibility
+  useEffect(() => {
+    const handleScroll = () => setShowScrollTop(window.scrollY > 400)
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
+
+  const toggleAlbum = (albumId) => {
+    setCollapsedAlbums(prev => ({ ...prev, [albumId]: !prev[albumId] }))
+  }
+
+  const collapseAll = () => {
+    const all = {}
+    artistDetail?.albums.forEach(a => { all[a.id] = true })
+    setCollapsedAlbums(all)
+  }
+
+  const expandAll = () => setCollapsedAlbums({})
 
   useEffect(() => {
     supabase.from('profiles').select('*').eq('is_admin', true).limit(1).single()
@@ -61,6 +84,7 @@ export default function App() {
       songs: [...(a.songs || [])].sort((x, y) => x.track_order - y.track_order)
     }))
     setArtistDetail({ albums: sorted })
+    setCollapsedAlbums({}) // reset on new artist
 
     const songIds = sorted.flatMap(a => a.songs.map(s => s.id))
     if (songIds.length && user) {
@@ -306,9 +330,7 @@ export default function App() {
                   <div>
                     <h1 className="text-4xl font-bold text-white">{selectedArtist.name}</h1>
                     {(selectedArtist.genre || selectedArtist.subgenre) && (
-                      <p className="text-violet-300 mt-1">
-                        {[selectedArtist.genre, selectedArtist.subgenre].filter(Boolean).join(' · ')}
-                      </p>
+                      <p className="text-violet-300 mt-1">{[selectedArtist.genre, selectedArtist.subgenre].filter(Boolean).join(' · ')}</p>
                     )}
                     {selectedArtist.debut_year && (
                       <p className="text-zinc-400 text-sm mt-0.5">Est. {selectedArtist.debut_year}</p>
@@ -338,7 +360,30 @@ export default function App() {
               <AlbumChart albums={artistDetail.albums} userRatings={userRatings} adminRatings={adminRatings} isAdmin={isAdmin} adminName={adminProfile?.username} />
             )}
 
-            {isAdmin && (
+            {/* Album controls */}
+            {artistDetail && artistDetail.albums.length > 0 && (
+              <div className="flex items-center justify-between">
+                {isAdmin && (
+                  <button onClick={() => setShowAddAlbum(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors">
+                    <Plus className="w-4 h-4" />Add Album
+                  </button>
+                )}
+                {!isAdmin && <div />}
+                <div className="flex items-center gap-2">
+                  <button onClick={expandAll}
+                    className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors">
+                    Expand All
+                  </button>
+                  <button onClick={collapseAll}
+                    className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors">
+                    Collapse All
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!artistDetail?.albums.length && isAdmin && (
               <div className="flex justify-end">
                 <button onClick={() => setShowAddAlbum(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors">
@@ -350,14 +395,19 @@ export default function App() {
             {dataLoading ? (
               <div className="text-center py-12 text-zinc-600">Loading...</div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {artistDetail?.albums.map(album => {
                   const uAvg = albumAvg(album.songs, userRatings)
                   const aAvg = !isAdmin ? albumAvg(album.songs, adminRatings) : null
+                  const isCollapsed = !!collapsedAlbums[album.id]
 
                   return (
                     <div key={album.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-                      <div className="bg-zinc-800/50 px-6 py-4 flex items-center justify-between gap-4 border-b border-zinc-800">
+                      {/* Album header — clicking toggles collapse */}
+                      <div
+                        className="bg-zinc-800/50 px-6 py-4 flex items-center justify-between gap-4 border-b border-zinc-800 cursor-pointer hover:bg-zinc-800/80 transition-colors select-none"
+                        onClick={() => toggleAlbum(album.id)}
+                      >
                         <div className="flex items-center gap-4 min-w-0">
                           {album.image_url ? (
                             <img src={album.image_url} alt={album.name}
@@ -376,44 +426,54 @@ export default function App() {
                             <p className="text-xs text-zinc-500 mt-0.5">{album.year ? `${album.year} · ` : ''}{album.songs.length} tracks</p>
                           </div>
                         </div>
-                        {isAdmin && (
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <button onClick={() => openEditAlbum(album)}
-                              className="p-2 text-zinc-500 hover:text-violet-400 hover:bg-violet-950/30 rounded-lg transition-colors" title="Edit album">
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => deleteAlbum(album.id, album.name)}
-                              className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors" title="Delete album">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {isAdmin && (
+                            <>
+                              <button
+                                onClick={e => { e.stopPropagation(); openEditAlbum(album) }}
+                                className="p-2 text-zinc-500 hover:text-violet-400 hover:bg-violet-950/30 rounded-lg transition-colors" title="Edit album">
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); deleteAlbum(album.id, album.name) }}
+                                className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors" title="Delete album">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                          <div className="p-2 text-zinc-500">
+                            {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
                           </div>
-                        )}
+                        </div>
                       </div>
 
-                      <div className="divide-y divide-zinc-800/60">
-                        {album.songs.map((song, idx) => {
-                          const uRating = userRatings[song.id] || 0
-                          const aRating = adminRatings[song.id] || 0
-                          return (
-                            <div key={song.id} className="px-6 py-3.5 flex items-center gap-4 hover:bg-zinc-800/30 transition-colors">
-                              <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0">{idx + 1}</span>
-                              <span className="text-zinc-200 text-sm flex-1 truncate">{song.name}</span>
-                              <div className="flex items-center gap-4 flex-shrink-0">
-                                {!isAdmin && aRating > 0 && (
+                      {/* Songs — hidden when collapsed */}
+                      {!isCollapsed && (
+                        <div className="divide-y divide-zinc-800/60">
+                          {album.songs.map((song, idx) => {
+                            const uRating = userRatings[song.id] || 0
+                            const aRating = adminRatings[song.id] || 0
+                            return (
+                              <div key={song.id} className="px-6 py-3.5 flex items-center gap-4 hover:bg-zinc-800/30 transition-colors">
+                                <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0">{idx + 1}</span>
+                                <span className="text-zinc-200 text-sm flex-1 truncate">{song.name}</span>
+                                <div className="flex items-center gap-4 flex-shrink-0">
+                                  {!isAdmin && aRating > 0 && (
+                                    <div className="flex flex-col items-end">
+                                      <span className="text-xs text-zinc-600 mb-1">{adminProfile?.username || 'Admin'}</span>
+                                      <StarRating rating={aRating} readonly size="sm" />
+                                    </div>
+                                  )}
                                   <div className="flex flex-col items-end">
-                                    <span className="text-xs text-zinc-600 mb-1">{adminProfile?.username || 'Admin'}</span>
-                                    <StarRating rating={aRating} readonly size="sm" />
+                                    {!isAdmin && aRating > 0 && <span className="text-xs text-zinc-600 mb-1">You</span>}
+                                    <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
                                   </div>
-                                )}
-                                <div className="flex flex-col items-end">
-                                  {!isAdmin && aRating > 0 && <span className="text-xs text-zinc-600 mb-1">You</span>}
-                                  <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
                                 </div>
                               </div>
-                            </div>
-                          )
-                        })}
-                      </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -429,6 +489,17 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Scroll to top button */}
+      {showScrollTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-6 right-6 z-50 w-11 h-11 bg-violet-600 hover:bg-violet-500 text-white rounded-full shadow-lg shadow-violet-900/40 flex items-center justify-center transition-all hover:scale-110"
+          title="Scroll to top"
+        >
+          <ArrowUp className="w-5 h-5" />
+        </button>
+      )}
 
       {/* Modals */}
       {showImport && <ImportModal onClose={() => setShowImport(false)} onImported={loadArtists} />}
