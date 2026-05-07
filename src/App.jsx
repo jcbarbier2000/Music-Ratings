@@ -30,6 +30,7 @@ export default function App() {
   const [editGenre, setEditGenre] = useState('')
   const [editSubgenre, setEditSubgenre] = useState('')
   const [editImageUrl, setEditImageUrl] = useState('')
+  const [editDebutYear, setEditDebutYear] = useState('')
   const [newAlbumName, setNewAlbumName] = useState('')
   const [newAlbumYear, setNewAlbumYear] = useState('')
   const [newAlbumImageUrl, setNewAlbumImageUrl] = useState('')
@@ -100,7 +101,12 @@ export default function App() {
   }
 
   const saveArtistEdit = async () => {
-    const updates = { genre: editGenre || null, subgenre: editSubgenre || null, image_url: editImageUrl || null }
+    const updates = {
+      genre: editGenre || null,
+      subgenre: editSubgenre || null,
+      image_url: editImageUrl || null,
+      debut_year: editDebutYear || null,
+    }
     await supabase.from('artists').update(updates).eq('id', selectedArtist.id)
     const updated = { ...selectedArtist, ...updates }
     setSelectedArtist(updated)
@@ -260,6 +266,9 @@ export default function App() {
                           {artist.genre}{artist.subgenre ? ` · ${artist.subgenre}` : ''}
                         </div>
                       )}
+                      {artist.debut_year && (
+                        <div className="text-xs text-zinc-600 mt-0.5">Est. {artist.debut_year}</div>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -297,7 +306,12 @@ export default function App() {
                   <div>
                     <h1 className="text-4xl font-bold text-white">{selectedArtist.name}</h1>
                     {(selectedArtist.genre || selectedArtist.subgenre) && (
-                      <p className="text-violet-300 mt-1">{[selectedArtist.genre, selectedArtist.subgenre].filter(Boolean).join(' · ')}</p>
+                      <p className="text-violet-300 mt-1">
+                        {[selectedArtist.genre, selectedArtist.subgenre].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                    {selectedArtist.debut_year && (
+                      <p className="text-zinc-400 text-sm mt-0.5">Est. {selectedArtist.debut_year}</p>
                     )}
                     <div className="flex gap-4 mt-2 text-sm text-zinc-500">
                       <span className="flex items-center gap-1"><Disc className="w-3.5 h-3.5" />{artistDetail?.albums.length || 0} albums</span>
@@ -306,7 +320,13 @@ export default function App() {
                   </div>
                 </div>
                 {isAdmin && (
-                  <button onClick={() => { setEditGenre(selectedArtist.genre || ''); setEditSubgenre(selectedArtist.subgenre || ''); setEditImageUrl(selectedArtist.image_url || ''); setShowEditArtist(true) }}
+                  <button onClick={() => {
+                    setEditGenre(selectedArtist.genre || '')
+                    setEditSubgenre(selectedArtist.subgenre || '')
+                    setEditImageUrl(selectedArtist.image_url || '')
+                    setEditDebutYear(selectedArtist.debut_year || '')
+                    setShowEditArtist(true)
+                  }}
                     className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-xl transition-colors flex-shrink-0">
                     Edit Info
                   </button>
@@ -359,13 +379,11 @@ export default function App() {
                         {isAdmin && (
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <button onClick={() => openEditAlbum(album)}
-                              className="p-2 text-zinc-500 hover:text-violet-400 hover:bg-violet-950/30 rounded-lg transition-colors"
-                              title="Edit album">
+                              className="p-2 text-zinc-500 hover:text-violet-400 hover:bg-violet-950/30 rounded-lg transition-colors" title="Edit album">
                               <Pencil className="w-4 h-4" />
                             </button>
                             <button onClick={() => deleteAlbum(album.id, album.name)}
-                              className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors"
-                              title="Delete album">
+                              className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors" title="Delete album">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
@@ -486,7 +504,7 @@ export default function App() {
       {/* Edit Artist */}
       {showEditArtist && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
               <h2 className="text-xl font-bold text-white">Edit Artist Info</h2>
               <button onClick={() => setShowEditArtist(false)} className="p-2 hover:bg-zinc-800 rounded-lg transition-colors">
@@ -503,6 +521,11 @@ export default function App() {
               <div>
                 <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">Subgenre</label>
                 <input value={editSubgenre} onChange={e => setEditSubgenre(e.target.value)} placeholder="e.g. Art Rock"
+                  className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">Debut Year</label>
+                <input value={editDebutYear} onChange={e => setEditDebutYear(e.target.value)} placeholder="e.g. 1991"
                   className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
               <div className="flex gap-3 pt-2">
