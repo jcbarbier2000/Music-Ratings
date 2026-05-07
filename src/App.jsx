@@ -366,28 +366,28 @@ export default function App() {
               <ChevronLeft className="w-4 h-4" />All Artists
             </button>
 
-            <div className="bg-gradient-to-br from-violet-900/40 to-indigo-900/20 border border-violet-800/30 rounded-2xl p-8">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-5">
+            <div className="bg-gradient-to-br from-violet-900/40 to-indigo-900/20 border border-violet-800/30 rounded-2xl p-6 sm:p-8">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div className="flex items-center gap-4 sm:gap-5">
                   {selectedArtist.image_url ? (
                     <img src={selectedArtist.image_url} alt={selectedArtist.name}
-                      className="w-24 h-24 rounded-2xl object-cover border border-violet-500/30 flex-shrink-0" />
+                      className="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl object-cover border border-violet-500/30 flex-shrink-0" />
                   ) : (
-                    <div className="w-24 h-24 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
-                      <Music className="w-12 h-12 text-violet-400" />
+                    <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
+                      <Music className="w-8 h-8 sm:w-12 sm:h-12 text-violet-400" />
                     </div>
                   )}
-                  <div>
-                    <h1 className="text-4xl font-bold text-white">{selectedArtist.name}</h1>
+                  <div className="min-w-0">
+                    <h1 className="text-2xl sm:text-4xl font-bold text-white truncate">{selectedArtist.name}</h1>
                     {(selectedArtist.genre || selectedArtist.subgenre) && (
-                      <p className="text-violet-300 mt-1">{[selectedArtist.genre, selectedArtist.subgenre].filter(Boolean).join(' · ')}</p>
+                      <p className="text-violet-300 mt-1 text-sm sm:text-base">{[selectedArtist.genre, selectedArtist.subgenre].filter(Boolean).join(' · ')}</p>
                     )}
                     {selectedArtist.debut_year && (
-                      <p className="text-zinc-400 text-sm mt-0.5">Est. {selectedArtist.debut_year}</p>
+                      <p className="text-zinc-400 text-xs sm:text-sm mt-0.5">Est. {selectedArtist.debut_year}</p>
                     )}
-                    <div className="flex gap-4 mt-2 text-sm text-zinc-500">
-                      <span className="flex items-center gap-1"><Disc className="w-3.5 h-3.5" />{albumCount(artistDetail?.albums)} albums</span>
-                      <span className="flex items-center gap-1"><ListMusic className="w-3.5 h-3.5" />{artistDetail?.albums.reduce((s, a) => s + a.songs.length, 0) || 0} songs</span>
+                    <div className="flex gap-4 mt-2 text-xs sm:text-sm text-zinc-500">
+                      <span className="flex items-center gap-1"><Disc className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{albumCount(artistDetail?.albums)} albums</span>
+                      <span className="flex items-center gap-1"><ListMusic className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{artistDetail?.albums.reduce((s, a) => s + a.songs.length, 0) || 0} songs</span>
                     </div>
                   </div>
                 </div>
@@ -399,7 +399,7 @@ export default function App() {
                     setEditDebutYear(selectedArtist.debut_year || '')
                     setShowEditArtist(true)
                   }}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-xl transition-colors flex-shrink-0">
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-xl transition-colors self-start sm:flex-shrink-0">
                     Edit Info
                   </button>
                 )}
@@ -453,25 +453,24 @@ export default function App() {
 
                   return (
                     <div key={album.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-                      {/* Album header — clicking toggles collapse */}
                       <div
-                        className="bg-zinc-800/50 px-6 py-4 flex items-center justify-between gap-4 border-b border-zinc-800 cursor-pointer hover:bg-zinc-800/80 transition-colors select-none"
+                        className="bg-zinc-800/50 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 border-b border-zinc-800 cursor-pointer hover:bg-zinc-800/80 transition-colors select-none"
                         onClick={() => toggleAlbum(album.id)}
                       >
-                        <div className="flex items-center gap-4 min-w-0">
+                        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                           {album.image_url ? (
                             <img src={album.image_url} alt={album.name}
-                              className="w-14 h-14 rounded-xl object-cover border border-zinc-700 flex-shrink-0" />
+                              className="w-10 h-10 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl object-cover border border-zinc-700 flex-shrink-0" />
                           ) : (
-                            <div className="w-14 h-14 rounded-xl bg-zinc-700/50 border border-zinc-700 flex items-center justify-center flex-shrink-0">
-                              <Disc className="w-6 h-6 text-zinc-500" />
+                            <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl bg-zinc-700/50 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+                              <Disc className="w-4 h-4 sm:w-6 sm:h-6 text-zinc-500" />
                             </div>
                           )}
                           <div className="min-w-0">
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <h3 className="font-bold text-white">{album.name}</h3>
-                              {uAvg && <span className="px-2.5 py-0.5 bg-indigo-600 text-white text-xs font-bold rounded-full">{uAvg}</span>}
-                              {aAvg && <span className="px-2.5 py-0.5 bg-violet-900/80 text-violet-300 text-xs font-medium rounded-full">{adminProfile?.username || 'Admin'} {aAvg}</span>}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-bold text-white text-sm sm:text-base">{album.name}</h3>
+                              {uAvg && <span className="px-2 py-0.5 bg-indigo-600 text-white text-xs font-bold rounded-full">{uAvg}</span>}
+                              {aAvg && <span className="px-2 py-0.5 bg-violet-900/80 text-violet-300 text-xs font-medium rounded-full">{adminProfile?.username || 'Admin'} {aAvg}</span>}
                             </div>
                             <p className="text-xs text-zinc-500 mt-0.5">{album.year ? `${album.year} · ` : ''}{album.songs.length} tracks</p>
                           </div>
@@ -481,17 +480,17 @@ export default function App() {
                             <>
                               <button
                                 onClick={e => { e.stopPropagation(); openEditAlbum(album) }}
-                                className="p-2 text-zinc-500 hover:text-violet-400 hover:bg-violet-950/30 rounded-lg transition-colors" title="Edit album">
-                                <Pencil className="w-4 h-4" />
+                                className="p-1.5 sm:p-2 text-zinc-500 hover:text-violet-400 hover:bg-violet-950/30 rounded-lg transition-colors" title="Edit album">
+                                <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                               </button>
                               <button
                                 onClick={e => { e.stopPropagation(); deleteAlbum(album.id, album.name) }}
-                                className="p-2 text-zinc-600 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors" title="Delete album">
-                                <Trash2 className="w-4 h-4" />
+                                className="p-1.5 sm:p-2 text-zinc-600 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors" title="Delete album">
+                                <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                               </button>
                             </>
                           )}
-                          <div className="p-2 text-zinc-500">
+                          <div className="p-1.5 sm:p-2 text-zinc-500">
                             {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
                           </div>
                         </div>
@@ -504,19 +503,37 @@ export default function App() {
                             const uRating = userRatings[song.id] || 0
                             const aRating = adminRatings[song.id] || 0
                             return (
-                              <div key={song.id} className="px-6 py-3.5 flex items-center gap-4 hover:bg-zinc-800/30 transition-colors">
-                                <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0">{idx + 1}</span>
-                                <span className="text-zinc-200 text-sm flex-1 truncate">{song.name}</span>
-                                <div className="flex items-center gap-4 flex-shrink-0">
-                                  {!isAdmin && aRating > 0 && (
-                                    <div className="flex flex-col items-end">
-                                      <span className="text-xs text-zinc-600 mb-1">{adminProfile?.username || 'Admin'}</span>
-                                      <StarRating rating={aRating} readonly size="sm" />
+                              <div key={song.id} className="px-4 sm:px-6 py-3 hover:bg-zinc-800/30 transition-colors">
+                                <div className="flex items-start gap-3">
+                                  <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0 mt-1">{idx + 1}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-zinc-200 text-sm block truncate">{song.name}</span>
+                                    {/* Mobile: ratings below song name */}
+                                    <div className="flex items-center gap-3 mt-1.5 sm:hidden">
+                                      {!isAdmin && aRating > 0 && (
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-xs text-zinc-600">{adminProfile?.username || 'Admin'}:</span>
+                                          <StarRating rating={aRating} readonly size="sm" />
+                                        </div>
+                                      )}
+                                      <div className="flex items-center gap-1.5">
+                                        {!isAdmin && aRating > 0 && <span className="text-xs text-zinc-600">You:</span>}
+                                        <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
+                                      </div>
                                     </div>
-                                  )}
-                                  <div className="flex flex-col items-end">
-                                    {!isAdmin && aRating > 0 && <span className="text-xs text-zinc-600 mb-1">You</span>}
-                                    <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
+                                  </div>
+                                  {/* Desktop: ratings inline */}
+                                  <div className="hidden sm:flex items-center gap-4 flex-shrink-0">
+                                    {!isAdmin && aRating > 0 && (
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-xs text-zinc-600 mb-1">{adminProfile?.username || 'Admin'}</span>
+                                        <StarRating rating={aRating} readonly size="sm" />
+                                      </div>
+                                    )}
+                                    <div className="flex flex-col items-end">
+                                      {!isAdmin && aRating > 0 && <span className="text-xs text-zinc-600 mb-1">You</span>}
+                                      <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
+                                    </div>
                                   </div>
                                 </div>
                               </div>
