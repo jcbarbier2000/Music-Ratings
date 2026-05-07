@@ -138,6 +138,16 @@ export default function App() {
     setShowEditArtist(false)
   }
 
+  const deleteArtist = async () => {
+    if (!confirm(`Permanently delete "${selectedArtist.name}"? This will remove all their albums, songs, and ratings.`)) return
+    await supabase.from('artists').delete().eq('id', selectedArtist.id)
+    setShowEditArtist(false)
+    setPage('home')
+    setSelectedArtist(null)
+    setArtistDetail(null)
+    loadArtists()
+  }
+
   const openEditAlbum = (album) => {
     setEditingAlbum(album)
     setEditAlbumName(album.name)
@@ -602,6 +612,12 @@ export default function App() {
               <div className="flex gap-3 pt-2">
                 <button onClick={saveArtistEdit} className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl transition-colors">Save</button>
                 <button onClick={() => setShowEditArtist(false)} className="px-6 py-3 border border-zinc-700 text-zinc-300 rounded-xl hover:bg-zinc-800 transition-colors">Cancel</button>
+              </div>
+              <div className="pt-2 border-t border-zinc-800">
+                <button onClick={deleteArtist}
+                  className="w-full py-3 text-red-400 hover:text-white hover:bg-red-950/60 border border-red-900/40 hover:border-red-800 rounded-xl transition-all text-sm font-medium">
+                  Delete Artist Permanently
+                </button>
               </div>
             </div>
           </div>
