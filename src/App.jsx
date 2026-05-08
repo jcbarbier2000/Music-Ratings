@@ -709,7 +709,11 @@ export default function App() {
                                   {profile?.username} {myScore.toFixed(2)}
                                 </span>
                                 {scores?.myTens > 0 && (
-                                  <span className="text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded">
+                                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                    profile?.is_admin
+                                      ? 'text-amber-400 bg-amber-400/10 border border-amber-400/20'
+                                      : 'text-indigo-400 bg-indigo-400/10 border border-indigo-400/20'
+                                  }`}>
                                     ★×{scores.myTens}
                                   </span>
                                 )}
@@ -722,7 +726,11 @@ export default function App() {
                                   {compareLabel} {compareScore.toFixed(2)}
                                 </span>
                                 {scores?.compareTens > 0 && (
-                                  <span className="text-xs font-bold text-amber-400/70 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded">
+                                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                    compareProfile?.is_admin
+                                      ? 'text-amber-400 bg-amber-400/10 border border-amber-400/20'
+                                      : 'text-indigo-400 bg-indigo-400/10 border border-indigo-400/20'
+                                  }`}>
                                     ★×{scores.compareTens}
                                   </span>
                                 )}
@@ -799,7 +807,11 @@ export default function App() {
                               {profile?.username}: {artistScores[selectedArtist.id].myScore.toFixed(2)}
                             </span>
                             {artistScores[selectedArtist.id].myTens > 0 && (
-                              <span className="text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-lg">
+                              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                                profile?.is_admin
+                                  ? 'text-amber-400 bg-amber-400/10 border border-amber-400/20'
+                                  : 'text-indigo-400 bg-indigo-400/10 border border-indigo-400/20'
+                              }`}>
                                 ★ {artistScores[selectedArtist.id].myTens} tens
                               </span>
                             )}
@@ -812,7 +824,11 @@ export default function App() {
                               {compareProfile?.username || adminProfile?.username}: {artistScores[selectedArtist.id].compareScore.toFixed(2)}
                             </span>
                             {artistScores[selectedArtist.id].compareTens > 0 && (
-                              <span className="text-xs font-bold text-amber-400/70 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-lg">
+                              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                                compareProfile?.is_admin
+                                  ? 'text-amber-400 bg-amber-400/10 border border-amber-400/20'
+                                  : 'text-indigo-400 bg-indigo-400/10 border border-indigo-400/20'
+                              }`}>
                                 ★ {artistScores[selectedArtist.id].compareTens} tens
                               </span>
                             )}
