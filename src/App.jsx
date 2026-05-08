@@ -941,8 +941,18 @@ export default function App() {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="font-bold text-white text-sm sm:text-base">{album.name}</h3>
-                              {uAvg && <span className="px-2 py-0.5 bg-indigo-600 text-white text-xs font-bold rounded-full">{uAvg}</span>}
-                              {aAvg && <span className="px-2 py-0.5 bg-violet-900/80 text-violet-300 text-xs font-medium rounded-full">{compareProfile?.username || 'Admin'} {aAvg}</span>}
+                              {uAvg && (
+                                <span className="px-2 py-0.5 text-xs font-bold rounded-full"
+                                  style={{ backgroundColor: scoreColor(parseFloat(uAvg)) + '33', color: scoreColor(parseFloat(uAvg)), border: `1px solid ${scoreColor(parseFloat(uAvg))}55` }}>
+                                  {uAvg}
+                                </span>
+                              )}
+                              {aAvg && (
+                                <span className="px-2 py-0.5 text-xs font-medium rounded-full"
+                                  style={{ backgroundColor: scoreColor(parseFloat(aAvg)) + '22', color: scoreColor(parseFloat(aAvg)), border: `1px solid ${scoreColor(parseFloat(aAvg))}44` }}>
+                                  {compareProfile?.username || 'Admin'} {aAvg}
+                                </span>
+                              )}
                             </div>
                             <p className="text-xs text-zinc-500 mt-0.5">{album.year ? `${album.year} · ` : ''}{album.songs.length} tracks</p>
                           </div>
