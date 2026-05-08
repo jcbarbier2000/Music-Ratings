@@ -212,74 +212,60 @@ export default function App() {
     const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
     const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
 
-    // Fetch songs with names for proper deduplication
-    const { data: albums } = await supabase
-      .from('albums')
-      .select('id, name, artist_id, songs(id, name)')
+    // Fetch all artists with their albums and songs in one query
+    const { data: artistsData } = await supabase
+      .from('artists')
+      .select('id, albums(id, name, songs(id, name))')
 
-    const filteredAlbums = (albums || []).filter(a => !isNonAlbum(a.name))
+    if (!artistsData) return
 
-    // Build artist -> unique song IDs, deduplicating by song name (case-insensitive)
-    const artistSongMap = {}
-    filteredAlbums.forEach(album => {
-      if (!artistSongMap[album.artist_id]) {
-        artistSongMap[album.artist_id] = { namesSeen: new Set(), songIds: new Set() }
-      }
-      album.songs.forEach(s => {
-        const nameKey = s.name.toLowerCase().trim()
-        if (!artistSongMap[album.artist_id].namesSeen.has(nameKey)) {
-          artistSongMap[album.artist_id].namesSeen.add(nameKey)
-          artistSongMap[album.artist_id].songIds.add(s.id)
-        }
+    // Build artistId -> { songName -> [songIds] } map, excluding non-album entries
+    const artistNameToSongIds = {}
+    artistsData.forEach(artist => {
+      const nameMap = {}
+      ;(artist.albums || []).forEach(album => {
+        if (isNonAlbum(album.name)) return
+        ;(album.songs || []).forEach(song => {
+          const nameKey = song.name.toLowerCase().trim()
+          if (!nameMap[nameKey]) nameMap[nameKey] = []
+          nameMap[nameKey].push(song.id)
+        })
       })
+      if (Object.keys(nameMap).length > 0) {
+        artistNameToSongIds[artist.id] = nameMap
+      }
     })
 
+    // Collect all unique song IDs across all artists (all variants)
     const allSongIds = [...new Set(
-      Object.values(artistSongMap).flatMap(v => [...v.songIds])
+      Object.values(artistNameToSongIds)
+        .flatMap(nameMap => Object.values(nameMap).flat())
     )]
     if (!allSongIds.length) return
 
-    const fetchScores = async (userId) => {
-      // Get ALL ratings for this user for these songs (may include duplicates by name)
+    const fetchRatingMap = async (userId) => {
       const { data: ratings } = await supabase
         .from('ratings')
         .select('song_id, rating')
         .eq('user_id', userId)
         .in('song_id', allSongIds)
-      const ratingMap = {}
-      ;(ratings || []).forEach(r => { ratingMap[r.song_id] = r.rating })
-      return ratingMap
+      const map = {}
+      ;(ratings || []).forEach(r => { map[r.song_id] = r.rating })
+      return map
     }
 
-    // Also fetch ALL song IDs including duplicates so we can find rated versions
-    const { data: allSongsData } = await supabase
-      .from('songs')
-      .select('id, name, album_id, albums(id, name, artist_id)')
-
-    // Build a map: artistId -> songName -> [all song IDs with that name]
-    const artistNameToSongIds = {}
-    ;(allSongsData || []).forEach(s => {
-      const artistId = s.albums?.artist_id
-      if (!artistId) return
-      const albumName = s.albums?.name?.toLowerCase().trim() || ''
-      if (NON.some(label => albumName.includes(label))) return
-      if (!artistNameToSongIds[artistId]) artistNameToSongIds[artistId] = {}
-      const nameKey = s.name.toLowerCase().trim()
-      if (!artistNameToSongIds[artistId][nameKey]) artistNameToSongIds[artistId][nameKey] = []
-      artistNameToSongIds[artistId][nameKey].push(s.id)
-    })
-
-    const myMap = await fetchScores(myUserId)
-    const compareMap = compareUserId && compareUserId !== myUserId ? await fetchScores(compareUserId) : null
+    const myMap = await fetchRatingMap(myUserId)
+    const compareMap = compareUserId && compareUserId !== myUserId
+      ? await fetchRatingMap(compareUserId)
+      : null
 
     const scores = {}
     Object.entries(artistNameToSongIds).forEach(([artistId, nameMap]) => {
-      // For each unique song name, pick the ID that has a rating (prefer rated over unrated)
       const getScore = (ratingMap) => {
+        // For each unique song name, find any variant that has been rated
         const songRatings = Object.values(nameMap).map(ids => {
-          // Find the first ID that has a rating for this user
           const ratedId = ids.find(id => ratingMap[id] !== undefined)
-          return ratedId ? ratingMap[ratedId] : undefined
+          return ratedId !== undefined ? ratingMap[ratedId] : undefined
         }).filter(v => v !== undefined)
 
         if (!songRatings.length) return null
