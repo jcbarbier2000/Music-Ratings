@@ -46,6 +46,10 @@ export default function App() {
   const [compareProfile, setCompareProfile] = useState(null) // profile to compare against
   const [compareRatings, setCompareRatings] = useState({})
   const [stats, setStats] = useState(null)
+  const [siteSettings, setSiteSettings] = useState({ artist_in_review: null, artist_on_deck: null })
+  const [showEditSettings, setShowEditSettings] = useState(false)
+  const [settingsInReview, setSettingsInReview] = useState('')
+  const [settingsOnDeck, setSettingsOnDeck] = useState('')
 
   // Scroll to top button visibility
   useEffect(() => {
@@ -183,6 +187,26 @@ export default function App() {
   useEffect(() => {
     if (user && adminProfile) loadStats()
   }, [user, adminProfile, loadStats])
+
+  const loadSiteSettings = useCallback(async () => {
+    const { data } = await supabase.from('site_settings').select('*')
+    if (data) {
+      const map = {}
+      data.forEach(row => { map[row.key] = row.value })
+      setSiteSettings({ artist_in_review: map.artist_in_review || null, artist_on_deck: map.artist_on_deck || null })
+    }
+  }, [])
+
+  const saveSiteSettings = async () => {
+    await supabase.from('site_settings').upsert([
+      { key: 'artist_in_review', value: settingsInReview.trim() || null, updated_at: new Date().toISOString() },
+      { key: 'artist_on_deck', value: settingsOnDeck.trim() || null, updated_at: new Date().toISOString() },
+    ])
+    setSiteSettings({ artist_in_review: settingsInReview.trim() || null, artist_on_deck: settingsOnDeck.trim() || null })
+    setShowEditSettings(false)
+  }
+
+  useEffect(() => { if (user) loadSiteSettings() }, [user, loadSiteSettings])
 
   const loadArtists = useCallback(async () => {
     const { data } = await supabase.from('artists').select('*').order('name')
@@ -409,6 +433,41 @@ export default function App() {
                 </button>
               )}
             </div>
+
+            {/* Currently in review / on deck banner */}
+            {(siteSettings.artist_in_review || siteSettings.artist_on_deck || isAdmin) && (
+              <div className="bg-gradient-to-r from-violet-900/30 to-indigo-900/20 border border-violet-800/30 rounded-2xl p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 flex-1">
+                    <div>
+                      <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Currently In Review</p>
+                      <p className="text-white font-semibold text-lg">
+                        {siteSettings.artist_in_review || <span className="text-zinc-600 font-normal text-base">Not set</span>}
+                      </p>
+                    </div>
+                    <div className="w-px bg-zinc-700/50 hidden sm:block" />
+                    <div>
+                      <p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">On Deck</p>
+                      <p className="text-white font-semibold text-lg">
+                        {siteSettings.artist_on_deck || <span className="text-zinc-600 font-normal text-base">Not set</span>}
+                      </p>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setSettingsInReview(siteSettings.artist_in_review || '')
+                        setSettingsOnDeck(siteSettings.artist_on_deck || '')
+                        setShowEditSettings(true)
+                      }}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white text-xs rounded-lg transition-colors flex-shrink-0"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Stats panel */}
             {stats && (
@@ -809,6 +868,50 @@ export default function App() {
       )}
 
       {/* Modals */}
+
+      {/* Edit Site Settings Modal */}
+      {showEditSettings && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-white">Edit Status</h2>
+              <button onClick={() => setShowEditSettings(false)} className="p-2 hover:bg-zinc-800 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-zinc-400" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">Currently In Review</label>
+                <input
+                  value={settingsInReview}
+                  onChange={e => setSettingsInReview(e.target.value)}
+                  placeholder="e.g. Rush"
+                  className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">On Deck</label>
+                <input
+                  value={settingsOnDeck}
+                  onChange={e => setSettingsOnDeck(e.target.value)}
+                  placeholder="e.g. Foo Fighters"
+                  className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={saveSiteSettings}
+                  className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl transition-colors">
+                  Save
+                </button>
+                <button onClick={() => setShowEditSettings(false)}
+                  className="px-6 py-3 border border-zinc-700 text-zinc-300 rounded-xl hover:bg-zinc-800 transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showImport && <ImportModal onClose={() => setShowImport(false)} onImported={loadArtists} />}
 
       {/* Add Album */}
