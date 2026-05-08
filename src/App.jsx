@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar, Users } from 'lucide-react'
+import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar, Users, Trophy } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './hooks/useAuth'
 import Login from './components/Login'
@@ -10,6 +10,7 @@ import ImageUpload from './components/ImageUpload'
 import ResetPassword from './components/ResetPassword'
 import MonthlyPicks from './components/MonthlyPicks'
 import ArtistRequests from './components/ArtistRequests'
+import TopTen from './components/TopTen'
 import { getCountryName, getFlagUrl } from './lib/countries'
 
 export default function App() {
@@ -404,6 +405,11 @@ export default function App() {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${page === 'requests' ? 'bg-violet-600 text-white' : 'text-zinc-400 hover:text-white'}`}>
               <Users className="w-4 h-4" />
               <span className="hidden sm:inline">Requests</span>
+            </button>
+            <button onClick={() => setPage('topten')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${page === 'topten' ? 'bg-violet-600 text-white' : 'text-zinc-400 hover:text-white'}`}>
+              <Trophy className="w-4 h-4" />
+              <span className="hidden sm:inline">Top 10</span>
             </button>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 rounded-lg">
               <span className="text-sm text-zinc-300 font-medium">{profile?.username}</span>
@@ -852,6 +858,21 @@ export default function App() {
             isAdmin={isAdmin}
             user={user}
             profile={profile}
+          />
+        )}
+
+        {/* TOP TEN PAGE */}
+        {page === 'topten' && (
+          <TopTen
+            user={user}
+            profile={profile}
+            adminProfile={adminProfile}
+            allProfiles={allProfiles}
+            artists={artists}
+            onNavigateToArtist={(artist) => {
+              setSelectedArtist(artist)
+              setPage('artist')
+            }}
           />
         )}
       </main>
