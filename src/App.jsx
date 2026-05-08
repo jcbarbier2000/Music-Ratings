@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp } from 'lucide-react'
+import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './hooks/useAuth'
 import Login from './components/Login'
@@ -8,6 +8,7 @@ import AlbumChart from './components/AlbumChart'
 import ImportModal from './components/ImportModal'
 import ImageUpload from './components/ImageUpload'
 import ResetPassword from './components/ResetPassword'
+import MonthlyPicks from './components/MonthlyPicks'
 import { getCountryName, getFlagUrl } from './lib/countries'
 
 export default function App() {
@@ -369,6 +370,11 @@ export default function App() {
                 <span className="hidden sm:inline">Home</span>
               </button>
             )}
+            <button onClick={() => setPage('monthly')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${page === 'monthly' ? 'bg-violet-600 text-white' : 'text-zinc-400 hover:text-white'}`}>
+              <Calendar className="w-4 h-4" />
+              <span className="hidden sm:inline">Monthly</span>
+            </button>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 rounded-lg">
               <span className="text-sm text-zinc-300 font-medium">{profile?.username}</span>
               {isAdmin && <span className="text-xs bg-violet-600 text-white px-1.5 py-0.5 rounded font-medium">Admin</span>}
@@ -761,6 +767,18 @@ export default function App() {
               </div>
             )}
           </div>
+        )}
+
+        {/* MONTHLY PICKS PAGE */}
+        {page === 'monthly' && (
+          <MonthlyPicks
+            isAdmin={isAdmin}
+            artists={artists}
+            onNavigateToArtist={(artist) => {
+              setSelectedArtist(artist)
+              setPage('artist')
+            }}
+          />
         )}
       </main>
 
