@@ -209,22 +209,19 @@ export default function App() {
   const loadArtistScores = useCallback(async (myUserId, compareUserId) => {
     if (!myUserId) return
 
-    const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
-    const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
-
     // Fetch all artists with their albums and songs in one query
+    // NOTE: includes ALL albums including Singles/Features — matching spreadsheet behavior
     const { data: artistsData } = await supabase
       .from('artists')
       .select('id, albums(id, name, songs(id, name))')
 
     if (!artistsData) return
 
-    // Build artistId -> { songName -> [songIds] } map, excluding non-album entries
+    // Build artistId -> { songName -> [songIds] } map, deduplicating by song name
     const artistNameToSongIds = {}
     artistsData.forEach(artist => {
       const nameMap = {}
       ;(artist.albums || []).forEach(album => {
-        if (isNonAlbum(album.name)) return
         ;(album.songs || []).forEach(song => {
           const nameKey = song.name.toLowerCase().trim()
           if (!nameMap[nameKey]) nameMap[nameKey] = []
