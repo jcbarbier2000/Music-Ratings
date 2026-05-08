@@ -259,7 +259,6 @@ export default function App() {
     const scores = {}
     Object.entries(artistNameToSongIds).forEach(([artistId, nameMap]) => {
       const getScore = (ratingMap) => {
-        // For each unique song name, find any variant that has been rated
         const songRatings = Object.values(nameMap).map(ids => {
           const ratedId = ids.find(id => ratingMap[id] !== undefined)
           return ratedId !== undefined ? ratingMap[ratedId] : undefined
@@ -269,9 +268,18 @@ export default function App() {
         return songRatings.reduce((s, v) => s + v, 0) / songRatings.length
       }
 
+      const getTens = (ratingMap) => {
+        return Object.values(nameMap).filter(ids => {
+          const ratedId = ids.find(id => ratingMap[id] !== undefined)
+          return ratedId !== undefined && ratingMap[ratedId] === 10
+        }).length
+      }
+
       scores[artistId] = {
         myScore: getScore(myMap),
+        myTens: getTens(myMap),
         compareScore: compareMap ? getScore(compareMap) : null,
+        compareTens: compareMap ? getTens(compareMap) : null,
       }
     })
 
@@ -695,16 +703,30 @@ export default function App() {
                         {(myScore || compareScore) && (
                           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             {myScore && (
-                              <span className="text-xs font-bold px-2 py-0.5 rounded"
-                                style={{ backgroundColor: scoreColor(myScore) + '33', color: scoreColor(myScore), border: `1px solid ${scoreColor(myScore)}55` }}>
-                                {profile?.username} {myScore.toFixed(2)}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold px-2 py-0.5 rounded"
+                                  style={{ backgroundColor: scoreColor(myScore) + '33', color: scoreColor(myScore), border: `1px solid ${scoreColor(myScore)}55` }}>
+                                  {profile?.username} {myScore.toFixed(2)}
+                                </span>
+                                {scores?.myTens > 0 && (
+                                  <span className="text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded">
+                                    ★×{scores.myTens}
+                                  </span>
+                                )}
+                              </div>
                             )}
                             {compareScore && compareProfile?.id !== user?.id && (
-                              <span className="text-xs font-bold px-2 py-0.5 rounded"
-                                style={{ backgroundColor: scoreColor(compareScore) + '22', color: scoreColor(compareScore), border: `1px solid ${scoreColor(compareScore)}44` }}>
-                                {compareLabel} {compareScore.toFixed(2)}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold px-2 py-0.5 rounded"
+                                  style={{ backgroundColor: scoreColor(compareScore) + '22', color: scoreColor(compareScore), border: `1px solid ${scoreColor(compareScore)}44` }}>
+                                  {compareLabel} {compareScore.toFixed(2)}
+                                </span>
+                                {scores?.compareTens > 0 && (
+                                  <span className="text-xs font-bold text-amber-400/70 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded">
+                                    ★×{scores.compareTens}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
@@ -771,16 +793,30 @@ export default function App() {
                     {artistScores[selectedArtist.id] && (
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         {artistScores[selectedArtist.id].myScore && (
-                          <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
-                            style={{ backgroundColor: scoreColor(artistScores[selectedArtist.id].myScore) + '33', color: scoreColor(artistScores[selectedArtist.id].myScore), border: `1px solid ${scoreColor(artistScores[selectedArtist.id].myScore)}55` }}>
-                            {profile?.username}: {artistScores[selectedArtist.id].myScore.toFixed(2)}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
+                              style={{ backgroundColor: scoreColor(artistScores[selectedArtist.id].myScore) + '33', color: scoreColor(artistScores[selectedArtist.id].myScore), border: `1px solid ${scoreColor(artistScores[selectedArtist.id].myScore)}55` }}>
+                              {profile?.username}: {artistScores[selectedArtist.id].myScore.toFixed(2)}
+                            </span>
+                            {artistScores[selectedArtist.id].myTens > 0 && (
+                              <span className="text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-lg">
+                                ★ {artistScores[selectedArtist.id].myTens} tens
+                              </span>
+                            )}
+                          </div>
                         )}
                         {artistScores[selectedArtist.id].compareScore && compareProfile?.id !== user?.id && (
-                          <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
-                            style={{ backgroundColor: scoreColor(artistScores[selectedArtist.id].compareScore) + '22', color: scoreColor(artistScores[selectedArtist.id].compareScore), border: `1px solid ${scoreColor(artistScores[selectedArtist.id].compareScore)}44` }}>
-                            {compareProfile?.username || adminProfile?.username}: {artistScores[selectedArtist.id].compareScore.toFixed(2)}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
+                              style={{ backgroundColor: scoreColor(artistScores[selectedArtist.id].compareScore) + '22', color: scoreColor(artistScores[selectedArtist.id].compareScore), border: `1px solid ${scoreColor(artistScores[selectedArtist.id].compareScore)}44` }}>
+                              {compareProfile?.username || adminProfile?.username}: {artistScores[selectedArtist.id].compareScore.toFixed(2)}
+                            </span>
+                            {artistScores[selectedArtist.id].compareTens > 0 && (
+                              <span className="text-xs font-bold text-amber-400/70 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-lg">
+                                ★ {artistScores[selectedArtist.id].compareTens} tens
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
