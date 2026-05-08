@@ -270,6 +270,8 @@ export default function App() {
       loadArtistScores(user.id, compareProfile?.id || adminProfile?.id)
     }
   }, [user, artists, compareProfile, adminProfile, loadArtistScores])
+
+  const loadSiteSettings = useCallback(async () => {
     const { data } = await supabase.from('site_settings').select('*')
     if (data) {
       const map = {}
