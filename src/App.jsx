@@ -51,6 +51,7 @@ export default function App() {
   const [showEditSettings, setShowEditSettings] = useState(false)
   const [settingsInReview, setSettingsInReview] = useState('')
   const [settingsOnDeck, setSettingsOnDeck] = useState('')
+  const [artistScores, setArtistScores] = useState({}) // artistId -> { myScore, compareScore }
 
   // Scroll to top button visibility
   useEffect(() => {
@@ -189,7 +190,86 @@ export default function App() {
     if (user && adminProfile) loadStats()
   }, [user, adminProfile, loadStats])
 
-  const loadSiteSettings = useCallback(async () => {
+  // Red → yellow → green gradient based on score 0-10
+  const scoreColor = (score) => {
+    if (!score) return '#52525b'
+    const s = Math.min(10, Math.max(0, score))
+    // 0-5: red to yellow, 5-10: yellow to green
+    if (s <= 5) {
+      const r = 220
+      const g = Math.round((s / 5) * 200)
+      return `rgb(${r}, ${g}, 30)`
+    } else {
+      const r = Math.round(220 - ((s - 5) / 5) * 180)
+      const g = Math.round(160 + ((s - 5) / 5) * 60)
+      return `rgb(${r}, ${g}, 30)`
+    }
+  }
+
+  const loadArtistScores = useCallback(async (myUserId, compareUserId) => {
+    if (!myUserId) return
+
+    // Get all albums + songs (excluding non-album labels)
+    const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
+    const { data: albums } = await supabase
+      .from('albums')
+      .select('id, name, artist_id, songs(id)')
+
+    const filteredAlbums = (albums || []).filter(a => !NON.includes(a.name.toLowerCase().trim()))
+
+    // Build artist -> unique song IDs map (deduplicate by song name across albums)
+    // We deduplicate by song ID since same song on multiple albums has same ID
+    const artistSongMap = {}
+    filteredAlbums.forEach(album => {
+      if (!artistSongMap[album.artist_id]) artistSongMap[album.artist_id] = new Set()
+      album.songs.forEach(s => artistSongMap[album.artist_id].add(s.id))
+    })
+
+    const allSongIds = [...new Set(filteredAlbums.flatMap(a => a.songs.map(s => s.id)))]
+    if (!allSongIds.length) return
+
+    const fetchScores = async (userId) => {
+      const { data: ratings } = await supabase
+        .from('ratings')
+        .select('song_id, rating')
+        .eq('user_id', userId)
+        .in('song_id', allSongIds)
+      const ratingMap = {}
+      ;(ratings || []).forEach(r => { ratingMap[r.song_id] = r.rating })
+      return ratingMap
+    }
+
+    const myMap = await fetchScores(myUserId)
+    const compareMap = compareUserId && compareUserId !== myUserId ? await fetchScores(compareUserId) : null
+
+    const scores = {}
+    Object.entries(artistSongMap).forEach(([artistId, songIdSet]) => {
+      const songIds = [...songIdSet]
+
+      const myRatings = songIds.map(id => myMap[id]).filter(Boolean)
+      const myScore = myRatings.length > 0
+        ? myRatings.reduce((s, v) => s + v, 0) / myRatings.length
+        : null
+
+      let compareScore = null
+      if (compareMap) {
+        const cRatings = songIds.map(id => compareMap[id]).filter(Boolean)
+        compareScore = cRatings.length > 0
+          ? cRatings.reduce((s, v) => s + v, 0) / cRatings.length
+          : null
+      }
+
+      scores[artistId] = { myScore, compareScore }
+    })
+
+    setArtistScores(scores)
+  }, [])
+
+  useEffect(() => {
+    if (user && artists.length > 0) {
+      loadArtistScores(user.id, compareProfile?.id || adminProfile?.id)
+    }
+  }, [user, artists, compareProfile, adminProfile, loadArtistScores])
     const { data } = await supabase.from('site_settings').select('*')
     if (data) {
       const map = {}
@@ -558,42 +638,66 @@ export default function App() {
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filtered.map(artist => (
-                <button key={artist.id}
-                  onClick={() => { setSelectedArtist(artist); setPage('artist') }}
-                  className="bg-zinc-900 border border-zinc-800 hover:border-violet-500/60 rounded-2xl p-4 text-left transition-all group">
-                  <div className="flex items-center gap-4">
-                    {artist.image_url ? (
-                      <img src={artist.image_url} alt={artist.name}
-                        className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-zinc-700" />
-                    ) : (
-                      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-600/20 to-indigo-600/20 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
-                        <Music className="w-6 h-6 text-violet-400" />
+              {filtered.map(artist => {
+                const scores = artistScores[artist.id]
+                const myScore = scores?.myScore
+                const compareScore = scores?.compareScore
+                const compareLabel = compareProfile?.username || adminProfile?.username
+
+                return (
+                  <button key={artist.id}
+                    onClick={() => { setSelectedArtist(artist); setPage('artist') }}
+                    className="bg-zinc-900 border border-zinc-800 hover:border-violet-500/60 rounded-2xl p-4 text-left transition-all group">
+                    <div className="flex items-center gap-4">
+                      {artist.image_url ? (
+                        <img src={artist.image_url} alt={artist.name}
+                          className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-zinc-700" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-600/20 to-indigo-600/20 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
+                          <Music className="w-6 h-6 text-violet-400" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-white group-hover:text-violet-300 transition-colors truncate">{artist.name}</div>
+                        {artist.genre && (
+                          <div className="text-xs text-zinc-500 truncate mt-0.5">
+                            {artist.genre}{artist.subgenre ? ` · ${artist.subgenre}` : ''}
+                          </div>
+                        )}
+                        {artist.debut_year && (
+                          <div className="text-xs text-zinc-600 mt-0.5">Est. {artist.debut_year}</div>
+                        )}
+                        {artist.country && (
+                          <div className="text-xs text-zinc-600 mt-0.5 flex items-center gap-1">
+                            {getFlagUrl(artist.country) && (
+                              <img src={getFlagUrl(artist.country)} alt={artist.country}
+                                className="w-4 h-3 object-cover rounded-sm border border-zinc-800" />
+                            )}
+                            <span>{getCountryName(artist.country)}</span>
+                          </div>
+                        )}
+                        {/* Scores */}
+                        {(myScore || compareScore) && (
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            {myScore && (
+                              <span className="text-xs font-bold px-2 py-0.5 rounded"
+                                style={{ backgroundColor: scoreColor(myScore) + '33', color: scoreColor(myScore), border: `1px solid ${scoreColor(myScore)}55` }}>
+                                {profile?.username} {myScore.toFixed(2)}
+                              </span>
+                            )}
+                            {compareScore && compareProfile?.id !== user?.id && (
+                              <span className="text-xs font-bold px-2 py-0.5 rounded"
+                                style={{ backgroundColor: scoreColor(compareScore) + '22', color: scoreColor(compareScore), border: `1px solid ${scoreColor(compareScore)}44` }}>
+                                {compareLabel} {compareScore.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="font-semibold text-white group-hover:text-violet-300 transition-colors truncate">{artist.name}</div>
-                      {artist.genre && (
-                        <div className="text-xs text-zinc-500 truncate mt-0.5">
-                          {artist.genre}{artist.subgenre ? ` · ${artist.subgenre}` : ''}
-                        </div>
-                      )}
-                      {artist.debut_year && (
-                        <div className="text-xs text-zinc-600 mt-0.5">Est. {artist.debut_year}</div>
-                      )}
-                      {artist.country && (
-                        <div className="text-xs text-zinc-600 mt-0.5 flex items-center gap-1">
-                          {getFlagUrl(artist.country) && (
-                            <img src={getFlagUrl(artist.country)} alt={artist.country}
-                              className="w-4 h-3 object-cover rounded-sm border border-zinc-800" />
-                          )}
-                          <span>{getCountryName(artist.country)}</span>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
 
             {filtered.length === 0 && (
@@ -648,6 +752,23 @@ export default function App() {
                       <span className="flex items-center gap-1"><Disc className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{albumCount(artistDetail?.albums)} albums</span>
                       <span className="flex items-center gap-1"><ListMusic className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{artistDetail?.albums.reduce((s, a) => s + a.songs.length, 0) || 0} songs</span>
                     </div>
+                    {/* Artist scores */}
+                    {artistScores[selectedArtist.id] && (
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {artistScores[selectedArtist.id].myScore && (
+                          <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
+                            style={{ backgroundColor: scoreColor(artistScores[selectedArtist.id].myScore) + '33', color: scoreColor(artistScores[selectedArtist.id].myScore), border: `1px solid ${scoreColor(artistScores[selectedArtist.id].myScore)}55` }}>
+                            {profile?.username}: {artistScores[selectedArtist.id].myScore.toFixed(2)}
+                          </span>
+                        )}
+                        {artistScores[selectedArtist.id].compareScore && compareProfile?.id !== user?.id && (
+                          <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
+                            style={{ backgroundColor: scoreColor(artistScores[selectedArtist.id].compareScore) + '22', color: scoreColor(artistScores[selectedArtist.id].compareScore), border: `1px solid ${scoreColor(artistScores[selectedArtist.id].compareScore)}44` }}>
+                            {compareProfile?.username || adminProfile?.username}: {artistScores[selectedArtist.id].compareScore.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {isAdmin && (
