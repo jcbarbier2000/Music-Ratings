@@ -589,7 +589,7 @@ export default function App() {
                 {/* Stat rows */}
                 {[
                   { label: 'Artists', total: stats.totalArtists, adminVal: stats.admin.completedArtists, userVal: stats.user?.completedArtists },
-                  { label: 'Albums', total: stats.totalAlbums, adminVal: stats.admin.completedAlbums, userVal: stats.user?.completedAlbums },
+                  { label: 'Albums & EPs', total: stats.totalAlbums, adminVal: stats.admin.completedAlbums, userVal: stats.user?.completedAlbums },
                   { label: 'Songs', total: stats.totalSongs, adminVal: stats.admin.ratedSongs, userVal: stats.user?.ratedSongs },
                 ].map(({ label, total, adminVal, userVal }) => (
                   <div key={label}>
@@ -794,7 +794,7 @@ export default function App() {
                       </p>
                     )}
                     <div className="flex gap-4 mt-2 text-xs sm:text-sm text-zinc-500">
-                      <span className="flex items-center gap-1"><Disc className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{albumCount(artistDetail?.albums)} albums</span>
+                      <span className="flex items-center gap-1"><Disc className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{albumCount(artistDetail?.albums)} albums & EPs</span>
                       <span className="flex items-center gap-1"><ListMusic className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{artistDetail?.albums.reduce((s, a) => s + a.songs.length, 0) || 0} songs</span>
                     </div>
                     {/* Artist scores */}
