@@ -8,6 +8,7 @@ import AlbumChart from './components/AlbumChart'
 import ImportModal from './components/ImportModal'
 import ImageUpload from './components/ImageUpload'
 import ResetPassword from './components/ResetPassword'
+import { getCountryName, getFlagUrl } from './lib/countries'
 
 export default function App() {
   const { user, profile, isAdmin, loading, signIn, signUp, signOut, resetPassword } = useAuth()
@@ -67,12 +68,6 @@ export default function App() {
 
   const slugify = (name) =>
     name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-
-  const flagEmoji = (code) => {
-    if (!code || code.length !== 2) return null
-    const offset = 127397
-    return String.fromCodePoint(...code.toUpperCase().split('').map(c => c.charCodeAt(0) + offset))
-  }
 
   // Store the intended slug from the URL on initial load
   const pendingSlugRef = useRef(
@@ -511,8 +506,11 @@ export default function App() {
                       )}
                       {artist.country && (
                         <div className="text-xs text-zinc-600 mt-0.5 flex items-center gap-1">
-                          {flagEmoji(artist.country) && <span>{flagEmoji(artist.country)}</span>}
-                          <span>{artist.country.toUpperCase()}</span>
+                          {getFlagUrl(artist.country) && (
+                            <img src={getFlagUrl(artist.country)} alt={artist.country}
+                              className="w-4 h-3 object-cover rounded-sm border border-zinc-800" />
+                          )}
+                          <span>{getCountryName(artist.country)}</span>
                         </div>
                       )}
                     </div>
@@ -559,10 +557,14 @@ export default function App() {
                     )}
                     {selectedArtist.country && (
                       <p className="text-zinc-400 text-xs sm:text-sm mt-0.5 flex items-center gap-1.5">
-                        {flagEmoji(selectedArtist.country) && (
-                          <span className="text-base leading-none">{flagEmoji(selectedArtist.country)}</span>
+                        {getFlagUrl(selectedArtist.country) && (
+                          <img
+                            src={getFlagUrl(selectedArtist.country)}
+                            alt={selectedArtist.country}
+                            className="w-6 h-4 object-cover rounded-sm border border-zinc-700"
+                          />
                         )}
-                        {selectedArtist.country.toUpperCase()}
+                        {getCountryName(selectedArtist.country)}
                       </p>
                     )}
                     <div className="flex gap-4 mt-2 text-xs sm:text-sm text-zinc-500">
@@ -880,7 +882,11 @@ export default function App() {
                     maxLength={2}
                     className="w-24 px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 uppercase" />
                   {editCountry.length === 2 && (
-                    <span className="text-3xl">{flagEmoji(editCountry)}</span>
+                    <div className="flex items-center gap-2">
+                      <img src={getFlagUrl(editCountry)} alt={editCountry}
+                        className="w-8 h-6 object-cover rounded border border-zinc-700" />
+                      <span className="text-sm text-zinc-300">{getCountryName(editCountry)}</span>
+                    </div>
                   )}
                 </div>
               </div>
