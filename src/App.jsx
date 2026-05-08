@@ -373,7 +373,7 @@ export default function App() {
             <button onClick={() => setPage('monthly')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${page === 'monthly' ? 'bg-violet-600 text-white' : 'text-zinc-400 hover:text-white'}`}>
               <Calendar className="w-4 h-4" />
-              <span className="hidden sm:inline">Monthly</span>
+              <span className="hidden sm:inline">New Music</span>
             </button>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 rounded-lg">
               <span className="text-sm text-zinc-300 font-medium">{profile?.username}</span>
