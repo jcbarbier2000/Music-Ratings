@@ -473,6 +473,8 @@ export default function App() {
       setItunesArtistSearching(false)
     }
   }
+
+  const searchItunesCoverArt = async (artistName, albumName) => {
     if (!artistName || !albumName) return
     setItunesSearching(true)
     try {
@@ -483,7 +485,6 @@ export default function App() {
         name: r.collectionName,
         artist: r.artistName,
         year: r.releaseDate?.slice(0, 4),
-        // Replace 100x100 with 600x600 for higher quality
         image: r.artworkUrl100?.replace('100x100', '600x600'),
       })).filter(r => r.image)
       setItunesResults(results)
