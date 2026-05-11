@@ -11,42 +11,33 @@ export default function ImportModal({ onClose, onImported }) {
   const [preview, setPreview] = useState(null)
   const [showHelp, setShowHelp] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [adminRatings, setAdminRatings] = useState({}) // albumName -> [{ song, rating }]
+  const [lastAlbumIsNonAlbum, setLastAlbumIsNonAlbum] = useState(true)
 
   const parseCSV = text => {
-  const rows = []
-  const lines = text.split('\n')
-  
-  for (const line of lines) {
-    if (!line.trim()) continue
-    const cells = []
-    let current = ''
-    let inQuotes = false
-    
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i]
-      
-      if (ch === '"') {
-        // Handle escaped double quotes ""
-        if (inQuotes && line[i + 1] === '"') {
-          current += '"'
-          i++ // skip next quote
+    const rows = []
+    const lines = text.split('\n')
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const cells = []
+      let current = ''
+      let inQuotes = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') { current += '"'; i++ }
+          else inQuotes = !inQuotes
+        } else if (ch === ',' && !inQuotes) {
+          cells.push(current.trim())
+          current = ''
         } else {
-          inQuotes = !inQuotes
+          current += ch
         }
-      } else if (ch === ',' && !inQuotes) {
-        cells.push(current.trim())
-        current = ''
-      } else {
-        current += ch
       }
+      cells.push(current.trim())
+      rows.push(cells)
     }
-    cells.push(current.trim())
-    rows.push(cells)
+    return rows
   }
-  
-  return rows
-}
 
   const handleFile = e => {
     const file = e.target.files[0]
@@ -83,7 +74,6 @@ export default function ImportModal({ onClose, onImported }) {
     const albumRow = data[0]
     const yearRow = songStart === 2 ? data[1] : null
     const albums = []
-    const ratings = {}
 
     for (let col = 0; col < albumRow.length; col += 3) {
       const name = albumRow[col]?.trim()
@@ -99,14 +89,18 @@ export default function ImportModal({ onClose, onImported }) {
         songs.push({ name: song, rating })
       }
 
-      albums.push({ name, year: year || null, songs })
-      ratings[name] = songs.filter(s => s.rating !== null)
+      albums.push({ name, year: year || null, songs, is_non_album: false })
+    }
+
+    // Mark last album as non-album if toggle is on
+    if (lastAlbumIsNonAlbum && albums.length > 0) {
+      albums[albums.length - 1].is_non_album = true
+      msgs.push(`"${albums[albums.length - 1].name}" marked as non-album (Singles/Features/etc.)`)
     }
 
     msgs.push(`Found ${albums.length} albums, ${albums.reduce((s, a) => s + a.songs.length, 0)} songs`)
     setLog(msgs)
     setPreview({ name: artistName.trim(), genre, subgenre, albums })
-    setAdminRatings(ratings)
     setStatus({ type: 'success', message: `Preview ready: ${albums.length} albums` })
   }
 
@@ -114,7 +108,6 @@ export default function ImportModal({ onClose, onImported }) {
     if (!preview) return
     setSaving(true)
     try {
-      // Upsert artist
       const { data: artist, error: artistErr } = await supabase
         .from('artists')
         .upsert({ name: preview.name, genre: genre || null, subgenre: subgenre || null },
@@ -122,18 +115,19 @@ export default function ImportModal({ onClose, onImported }) {
         .select().single()
       if (artistErr) throw artistErr
 
+      // Track song names seen across all albums to avoid duplicate ratings
+      const seenSongNames = new Set()
+
       for (const album of preview.albums) {
-        // Upsert album
         const { data: alb, error: albErr } = await supabase
           .from('albums')
-          .upsert({ artist_id: artist.id, name: album.name, year: album.year },
+          .upsert({ artist_id: artist.id, name: album.name, year: album.year, is_non_album: album.is_non_album },
                    { onConflict: 'artist_id,name' })
           .select().single()
         if (albErr) throw albErr
 
         for (let i = 0; i < album.songs.length; i++) {
           const song = album.songs[i]
-          // Upsert song
           const { data: s, error: sErr } = await supabase
             .from('songs')
             .upsert({ album_id: alb.id, name: song.name, track_order: i },
@@ -141,11 +135,13 @@ export default function ImportModal({ onClose, onImported }) {
             .select().single()
           if (sErr) throw sErr
 
-          // Save admin rating if present
-          if (song.rating !== null) {
+          // Only save rating if this song name hasn't been seen yet across all albums
+          const nameKey = song.name.toLowerCase().trim()
+          if (song.rating !== null && !seenSongNames.has(nameKey)) {
             const rounded = Math.round(song.rating)
             await supabase.rpc('upsert_rating', { p_song_id: s.id, p_rating: Math.min(10, Math.max(1, rounded)) })
           }
+          seenSongNames.add(nameKey)
         }
       }
 
