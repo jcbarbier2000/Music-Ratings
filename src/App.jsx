@@ -119,143 +119,96 @@ export default function App() {
   const loadStats = useCallback(async () => {
     if (!user || !adminProfile) return
 
-    const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
-    const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
+    try {
+      const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
+      const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
 
-    // Fetch everything flat
-    const { data: allAlbums } = await supabase.from('albums').select('id, name, artist_id')
-    const { data: allSongs } = await supabase.from('songs').select('id, name, album_id')
-    const { data: allArtists } = await supabase.from('artists').select('id')
-    const { data: adminRatingsData } = await supabase
-      .from('ratings').select('song_id, rating').eq('user_id', adminProfile.id)
+      const [albumsRes, songsRes, artistsRes, adminRatingsRes] = await Promise.all([
+        supabase.from('albums').select('id, name, artist_id'),
+        supabase.from('songs').select('id, name, album_id'),
+        supabase.from('artists').select('id'),
+        supabase.from('ratings').select('song_id').eq('user_id', adminProfile.id),
+      ])
 
-    const adminRatingMap = {}
-    ;(adminRatingsData || []).forEach(r => { adminRatingMap[r.song_id] = r.rating })
+      const allAlbums = albumsRes.data || []
+      const allSongs = songsRes.data || []
+      const totalArtists = (artistsRes.data || []).length
+      const adminRatedIds = new Set((adminRatingsRes.data || []).map(r => r.song_id))
 
-    const filteredAlbumIds = new Set(
-      (allAlbums || []).filter(a => !isNonAlbum(a.name)).map(a => a.id)
-    )
-    const filteredAlbums = (allAlbums || []).filter(a => filteredAlbumIds.has(a.id))
-    const totalAlbums = filteredAlbums.length
-    const totalArtists = (allArtists || []).length
+      const filteredAlbumIds = new Set(
+        allAlbums.filter(a => !isNonAlbum(a.name)).map(a => a.id)
+      )
+      const filteredAlbums = allAlbums.filter(a => filteredAlbumIds.has(a.id))
+      const totalAlbums = filteredAlbums.length
 
-    const albumToArtist = {}
-    filteredAlbums.forEach(a => { albumToArtist[a.id] = a.artist_id })
+      const albumToArtist = {}
+      filteredAlbums.forEach(a => { albumToArtist[a.id] = a.artist_id })
 
-    // Build artistId -> songName -> preferred songId
-    // Prefer the song ID that has an admin rating; fall back to any
-    const artistSongMap = {}
-    ;(allSongs || []).forEach(s => {
-      const artistId = albumToArtist[s.album_id]
-      if (!artistId) return
-      if (!artistSongMap[artistId]) artistSongMap[artistId] = {}
-      const key = s.name.toLowerCase().trim()
-      const existing = artistSongMap[artistId][key]
-      // Prefer the ID that has a rating
-      if (!existing || (!adminRatingMap[existing] && adminRatingMap[s.id])) {
-        artistSongMap[artistId][key] = s.id
+      // For each artist, deduplicate songs by name, preferring the rated song ID
+      // artistId -> songNameKey -> songId
+      const buildSongMap = (ratedIds) => {
+        const map = {}
+        allSongs.forEach(s => {
+          const artistId = albumToArtist[s.album_id]
+          if (!artistId) return
+          if (!map[artistId]) map[artistId] = {}
+          const key = s.name.toLowerCase().trim()
+          const existing = map[artistId][key]
+          if (!existing || (!ratedIds.has(existing) && ratedIds.has(s.id))) {
+            map[artistId][key] = s.id
+          }
+        })
+        return map
       }
-    })
 
-    // Build albumId -> canonical song IDs
-    const albumSongMap = {}
-    ;(allSongs || []).forEach(s => {
-      const artistId = albumToArtist[s.album_id]
-      if (!artistId) return
-      const key = s.name.toLowerCase().trim()
-      if (artistSongMap[artistId][key] === s.id) {
-        if (!albumSongMap[s.album_id]) albumSongMap[s.album_id] = []
-        albumSongMap[s.album_id].push(s.id)
-      }
-    })
+      const adminSongMap = buildSongMap(adminRatedIds)
+      const uniqueAdminSongIds = Object.values(adminSongMap).flatMap(m => Object.values(m))
+      const totalSongs = new Set(uniqueAdminSongIds).size
 
-    const uniqueSongIds = [...new Set(
-      Object.values(artistSongMap).flatMap(nameMap => Object.values(nameMap))
-    )]
-    const totalSongs = uniqueSongIds.length
+      const calcCompletions = (songMap, ratedIds) => {
+        const uniqueSongIds = [...new Set(Object.values(songMap).flatMap(m => Object.values(m)))]
+        const ratedSongs = uniqueSongIds.filter(id => ratedIds.has(id)).length
 
-    // Fetch all ratings for a user in batches
-    const fetchAllRatings = async (userId) => {
-      const ratedIds = new Set()
-      const batchSize = 500
-      for (let i = 0; i < uniqueSongIds.length; i += batchSize) {
-        const batch = uniqueSongIds.slice(i, i + batchSize)
-        const { data } = await supabase
-          .from('ratings').select('song_id')
-          .eq('user_id', userId).in('song_id', batch)
-        ;(data || []).forEach(r => ratedIds.add(r.song_id))
-      }
-      return ratedIds
-    }
+        // Build album -> canonical song IDs
+        const albumSongs = {}
+        allSongs.forEach(s => {
+          const artistId = albumToArtist[s.album_id]
+          if (!artistId) return
+          const key = s.name.toLowerCase().trim()
+          if (songMap[artistId]?.[key] === s.id) {
+            if (!albumSongs[s.album_id]) albumSongs[s.album_id] = []
+            albumSongs[s.album_id].push(s.id)
+          }
+        })
 
-    const calcCompletions = (ratedSet) => {
-      const ratedSongs = uniqueSongIds.filter(id => ratedSet.has(id)).length
-      const completedAlbums = filteredAlbums.filter(album => {
-        const songIds = albumSongMap[album.id] || []
-        return songIds.length > 0 && songIds.every(id => ratedSet.has(id))
-      }).length
-      const completedArtists = Object.entries(artistSongMap).filter(([, nameMap]) => {
-        const ids = Object.values(nameMap)
-        return ids.length > 0 && ids.every(id => ratedSet.has(id))
-      }).length
-      return { ratedSongs, completedAlbums, completedArtists }
-    }
-
-    const adminRatedSet = await fetchAllRatings(adminProfile.id)
-    const adminStats = calcCompletions(adminRatedSet)
-
-    let userStats = null
-    if (user.id !== adminProfile.id) {
-      // For user stats, prefer song IDs that have user ratings
-      const { data: userRatingsData } = await supabase
-        .from('ratings').select('song_id').eq('user_id', user.id)
-      const userRatedSongIds = new Set((userRatingsData || []).map(r => r.song_id))
-
-      // Rebuild map preferring user-rated IDs
-      const userArtistSongMap = {}
-      ;(allSongs || []).forEach(s => {
-        const artistId = albumToArtist[s.album_id]
-        if (!artistId) return
-        if (!userArtistSongMap[artistId]) userArtistSongMap[artistId] = {}
-        const key = s.name.toLowerCase().trim()
-        const existing = userArtistSongMap[artistId][key]
-        if (!existing || (!userRatedSongIds.has(existing) && userRatedSongIds.has(s.id))) {
-          userArtistSongMap[artistId][key] = s.id
-        }
-      })
-
-      const userSongIds = [...new Set(
-        Object.values(userArtistSongMap).flatMap(nameMap => Object.values(nameMap))
-      )]
-      const userRatedSet = new Set([...userRatedSongIds].filter(id => userSongIds.includes(id)))
-      const userAlbumSongMap = {}
-      ;(allSongs || []).forEach(s => {
-        const artistId = albumToArtist[s.album_id]
-        if (!artistId) return
-        const key = s.name.toLowerCase().trim()
-        if (userArtistSongMap[artistId][key] === s.id) {
-          if (!userAlbumSongMap[s.album_id]) userAlbumSongMap[s.album_id] = []
-          userAlbumSongMap[s.album_id].push(s.id)
-        }
-      })
-
-      const userCalcCompletions = (ratedSet) => {
-        const ratedSongs = userSongIds.filter(id => ratedSet.has(id)).length
-        const completedAlbums = filteredAlbums.filter(album => {
-          const songIds = userAlbumSongMap[album.id] || []
-          return songIds.length > 0 && songIds.every(id => ratedSet.has(id))
+        const completedAlbums = filteredAlbums.filter(a => {
+          const ids = albumSongs[a.id] || []
+          return ids.length > 0 && ids.every(id => ratedIds.has(id))
         }).length
-        const completedArtists = Object.entries(userArtistSongMap).filter(([, nameMap]) => {
+
+        const completedArtists = Object.values(songMap).filter(nameMap => {
           const ids = Object.values(nameMap)
-          return ids.length > 0 && ids.every(id => ratedSet.has(id))
+          return ids.length > 0 && ids.every(id => ratedIds.has(id))
         }).length
+
         return { ratedSongs, completedAlbums, completedArtists }
       }
 
-      userStats = userCalcCompletions(userRatedSet)
-    }
+      const adminStats = calcCompletions(adminSongMap, adminRatedIds)
 
-    setStats({ totalArtists, totalAlbums, totalSongs, admin: adminStats, user: userStats })
+      let userStats = null
+      if (user.id !== adminProfile.id) {
+        const { data: userRatingsData } = await supabase
+          .from('ratings').select('song_id').eq('user_id', user.id)
+        const userRatedIds = new Set((userRatingsData || []).map(r => r.song_id))
+        const userSongMap = buildSongMap(userRatedIds)
+        userStats = calcCompletions(userSongMap, userRatedIds)
+      }
+
+      setStats({ totalArtists, totalAlbums, totalSongs, admin: adminStats, user: userStats })
+    } catch (err) {
+      console.error('loadStats error:', err)
+    }
   }, [user, adminProfile])
 
   useEffect(() => {
