@@ -122,38 +122,53 @@ export default function App() {
     const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
     const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
 
-    // Fetch all albums with their songs and artist info
-    const { data: allAlbums } = await supabase
-      .from('albums')
-      .select('id, name, artist_id, songs(id, name)')
-    const { data: allArtists } = await supabase
-      .from('artists')
-      .select('id')
+    // Fetch albums and songs separately to avoid nested query issues
+    const { data: allAlbums } = await supabase.from('albums').select('id, name, artist_id')
+    const { data: allSongs } = await supabase.from('songs').select('id, name, album_id')
+    const { data: allArtists } = await supabase.from('artists').select('id')
 
-    const filteredAlbums = (allAlbums || []).filter(a => !isNonAlbum(a.name))
+    const filteredAlbumIds = new Set(
+      (allAlbums || []).filter(a => !isNonAlbum(a.name)).map(a => a.id)
+    )
+    const filteredAlbums = (allAlbums || []).filter(a => filteredAlbumIds.has(a.id))
     const totalAlbums = filteredAlbums.length
     const totalArtists = (allArtists || []).length
 
-    // Deduplicate songs by name within each artist (same logic as score calculation)
-    // Build artistId -> { songName -> first songId }
-    const artistSongMap = {}
-    filteredAlbums.forEach(album => {
-      if (!artistSongMap[album.artist_id]) artistSongMap[album.artist_id] = {}
-      ;(album.songs || []).forEach(s => {
-        const key = s.name.toLowerCase().trim()
-        if (!artistSongMap[album.artist_id][key]) {
-          artistSongMap[album.artist_id][key] = s.id
-        }
-      })
+    // Map album -> artist
+    const albumToArtist = {}
+    filteredAlbums.forEach(a => { albumToArtist[a.id] = a.artist_id })
+
+    // Deduplicate songs by name within each artist
+    const artistSongMap = {} // artistId -> { songName -> songId }
+    ;(allSongs || []).forEach(s => {
+      const artistId = albumToArtist[s.album_id]
+      if (!artistId) return // song is in a non-album, skip
+      if (!artistSongMap[artistId]) artistSongMap[artistId] = {}
+      const key = s.name.toLowerCase().trim()
+      if (!artistSongMap[artistId][key]) {
+        artistSongMap[artistId][key] = s.id
+      }
     })
 
-    // Unique song IDs (one per unique song name per artist)
+    // Album -> unique song IDs map (deduplicated by name within artist)
+    const albumSongMap = {} // albumId -> [songIds that are the "canonical" version]
+    ;(allSongs || []).forEach(s => {
+      const artistId = albumToArtist[s.album_id]
+      if (!artistId) return
+      const key = s.name.toLowerCase().trim()
+      // Only include this song if it's the canonical one for this artist
+      if (artistSongMap[artistId][key] === s.id) {
+        if (!albumSongMap[s.album_id]) albumSongMap[s.album_id] = []
+        albumSongMap[s.album_id].push(s.id)
+      }
+    })
+
     const uniqueSongIds = [...new Set(
       Object.values(artistSongMap).flatMap(nameMap => Object.values(nameMap))
     )]
     const totalSongs = uniqueSongIds.length
 
-    // Fetch all ratings in batches of 500 to avoid Supabase limits
+    // Fetch ratings in batches of 500
     const fetchAllRatings = async (userId) => {
       const ratedIds = new Set()
       const batchSize = 500
@@ -170,23 +185,15 @@ export default function App() {
     }
 
     const calcCompletions = (ratedSet) => {
-      // Songs rated = unique song IDs that have a rating
       const ratedSongs = uniqueSongIds.filter(id => ratedSet.has(id)).length
 
-      // Album complete = all unique songs in that album are rated
-      // (using the deduplicated song IDs for each album)
+      // Album complete = all its canonical songs rated
       const completedAlbums = filteredAlbums.filter(album => {
-        const seenNames = new Set()
-        const uniqueSongs = (album.songs || []).filter(s => {
-          const key = s.name.toLowerCase().trim()
-          if (seenNames.has(key)) return false
-          seenNames.add(key)
-          return true
-        })
-        return uniqueSongs.length > 0 && uniqueSongs.every(s => ratedSet.has(s.id))
+        const songIds = albumSongMap[album.id] || []
+        return songIds.length > 0 && songIds.every(id => ratedSet.has(id))
       }).length
 
-      // Artist complete = all their unique songs are rated
+      // Artist complete = all their canonical songs rated
       const completedArtists = Object.entries(artistSongMap).filter(([, nameMap]) => {
         const ids = Object.values(nameMap)
         return ids.length > 0 && ids.every(id => ratedSet.has(id))
