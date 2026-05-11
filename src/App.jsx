@@ -311,9 +311,13 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (user && artists.length > 0) {
-      loadArtistScores(user.id, compareProfile?.id || adminProfile?.id)
-    }
+    if (!user || artists.length === 0 || adminProfile === undefined) return
+    const compareId = compareProfile?.id !== user.id ? compareProfile?.id : null
+    // Small delay to let all state settle before firing
+    const timer = setTimeout(() => {
+      loadArtistScores(user.id, compareId)
+    }, 300)
+    return () => clearTimeout(timer)
   }, [user, artists, compareProfile, adminProfile, loadArtistScores])
 
   const loadSiteSettings = useCallback(async () => {
