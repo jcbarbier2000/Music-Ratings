@@ -241,22 +241,13 @@ export default function App() {
       const [albumsRes, songsRes, myRatingsRes] = await Promise.all([
         supabase.from('albums').select('id, name, artist_id').limit(10000),
         supabase.from('songs').select('id, name, album_id').limit(10000),
-        supabase.from('ratings').select('song_id, rating').eq('user_id', myUserId).limit(10000),
+        supabase.from('ratings').select('song_id, rating').eq('user_id', myUserId).limit(5000),
       ])
 
       const allAlbums = albumsRes.data || []
       const allSongs = songsRes.data || []
       const myRatingMap = {}
       ;(myRatingsRes.data || []).forEach(r => { myRatingMap[r.song_id] = r.rating })
-
-      console.log('loadArtistScores debug:', {
-        albums: allAlbums.length,
-        songs: allSongs.length,
-        myRatings: Object.keys(myRatingMap).length,
-        albumsError: albumsRes.error,
-        songsError: songsRes.error,
-        ratingsError: myRatingsRes.error,
-      })
 
       // All albums (including non-albums — artist score includes everything)
       const albumToArtist = {}
