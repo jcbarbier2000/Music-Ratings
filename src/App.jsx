@@ -127,7 +127,7 @@ export default function App() {
         supabase.from('albums').select('id, name, artist_id').limit(10000),
         supabase.from('songs').select('id, name, album_id').limit(10000),
         supabase.from('artists').select('id').limit(10000),
-        supabase.rpc('get_user_ratings', { p_user_id: adminProfile.id }),
+        supabase.from('ratings').select('song_id').eq('user_id', adminProfile.id).limit(10000),
       ])
 
       const allAlbums = albumsRes.data || []
@@ -198,7 +198,7 @@ export default function App() {
 
       let userStats = null
       if (user.id !== adminProfile.id) {
-        const { data: userRatingsData } = await supabase.rpc('get_user_ratings', { p_user_id: user.id })
+        const { data: userRatingsData } = await supabase.from('ratings').select('song_id').eq('user_id', user.id).limit(10000)
         const userRatedIds = new Set((userRatingsData || []).map(r => r.song_id))
         const userSongMap = buildSongMap(userRatedIds)
         userStats = calcCompletions(userSongMap, userRatedIds)
@@ -241,16 +241,16 @@ export default function App() {
       const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
       const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
 
-      const [albumsRes, songsRes, myRatingsRes] = await Promise.all([
-        supabase.from('albums').select('id, name, artist_id').limit(10000),
-        supabase.from('songs').select('id, name, album_id').limit(10000),
-        supabase.rpc('get_user_ratings', { p_user_id: myUserId }),
-      ])
+      // Fetch albums, songs, and ratings separately
+      const { data: allAlbums, error: e1 } = await supabase.from('albums').select('id, name, artist_id').limit(10000)
+      const { data: allSongs, error: e2 } = await supabase.from('songs').select('id, name, album_id').limit(10000)
+      const { data: myRatingsData, error: e3 } = await supabase.from('ratings').select('song_id, rating').eq('user_id', myUserId).limit(10000)
 
-      const allAlbums = albumsRes.data || []
-      const allSongs = songsRes.data || []
+      console.log('errors:', e1, e2, e3)
+      console.log('counts:', allAlbums?.length, allSongs?.length, myRatingsData?.length)
+
       const myRatingMap = {}
-      ;(myRatingsRes.data || []).forEach(r => { myRatingMap[r.song_id] = r.rating })
+      ;(myRatingsData || []).forEach(r => { myRatingMap[r.song_id] = r.rating })
 
       // All albums (including non-albums — artist score includes everything)
       const albumToArtist = {}
@@ -259,7 +259,7 @@ export default function App() {
       // Compare ratings
       let compareRatingMap = null
       if (compareUserId && compareUserId !== myUserId) {
-        const { data: cData } = await supabase.rpc('get_user_ratings', { p_user_id: compareUserId })
+        const { data: cData } = await supabase.from('ratings').select('song_id, rating').eq('user_id', compareUserId).limit(10000)
         compareRatingMap = {}
         ;(cData || []).forEach(r => { compareRatingMap[r.song_id] = r.rating })
       }
