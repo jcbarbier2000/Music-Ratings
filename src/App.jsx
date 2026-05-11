@@ -234,81 +234,76 @@ export default function App() {
   const loadArtistScores = useCallback(async (myUserId, compareUserId) => {
     if (!myUserId) return
 
-    // Fetch all artists with their albums and songs in one query
-    // NOTE: includes ALL albums including Singles/Features — matching spreadsheet behavior
-    const { data: artistsData } = await supabase
-      .from('artists')
-      .select('id, albums(id, name, songs(id, name))')
+    try {
+      const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
+      const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
 
-    if (!artistsData) return
+      const [albumsRes, songsRes, myRatingsRes] = await Promise.all([
+        supabase.from('albums').select('id, name, artist_id'),
+        supabase.from('songs').select('id, name, album_id'),
+        supabase.from('ratings').select('song_id, rating').eq('user_id', myUserId),
+      ])
 
-    // Build artistId -> { songName -> [songIds] } map, deduplicating by song name
-    const artistNameToSongIds = {}
-    artistsData.forEach(artist => {
-      const nameMap = {}
-      ;(artist.albums || []).forEach(album => {
-        ;(album.songs || []).forEach(song => {
-          const nameKey = song.name.toLowerCase().trim()
-          if (!nameMap[nameKey]) nameMap[nameKey] = []
-          nameMap[nameKey].push(song.id)
-        })
-      })
-      if (Object.keys(nameMap).length > 0) {
-        artistNameToSongIds[artist.id] = nameMap
+      const allAlbums = albumsRes.data || []
+      const allSongs = songsRes.data || []
+      const myRatingMap = {}
+      ;(myRatingsRes.data || []).forEach(r => { myRatingMap[r.song_id] = r.rating })
+
+      // All albums (including non-albums — artist score includes everything)
+      const albumToArtist = {}
+      allAlbums.forEach(a => { albumToArtist[a.id] = a.artist_id })
+
+      // Compare ratings
+      let compareRatingMap = null
+      if (compareUserId && compareUserId !== myUserId) {
+        const { data: cData } = await supabase
+          .from('ratings').select('song_id, rating').eq('user_id', compareUserId)
+        compareRatingMap = {}
+        ;(cData || []).forEach(r => { compareRatingMap[r.song_id] = r.rating })
       }
-    })
 
-    // Collect all unique song IDs across all artists (all variants)
-    const allSongIds = [...new Set(
-      Object.values(artistNameToSongIds)
-        .flatMap(nameMap => Object.values(nameMap).flat())
-    )]
-    if (!allSongIds.length) return
+      // Build artistId -> songName -> [all song IDs with that name]
+      // Include ALL albums (Singles etc.) to match spreadsheet behavior
+      const artistNameMap = {} // artistId -> songName -> [songIds]
+      allSongs.forEach(s => {
+        const artistId = albumToArtist[s.album_id]
+        if (!artistId) return
+        if (!artistNameMap[artistId]) artistNameMap[artistId] = {}
+        const key = s.name.toLowerCase().trim()
+        if (!artistNameMap[artistId][key]) artistNameMap[artistId][key] = []
+        artistNameMap[artistId][key].push(s.id)
+      })
 
-    const fetchRatingMap = async (userId) => {
-      const { data: ratings } = await supabase
-        .from('ratings')
-        .select('song_id, rating')
-        .eq('user_id', userId)
-        .in('song_id', allSongIds)
-      const map = {}
-      ;(ratings || []).forEach(r => { map[r.song_id] = r.rating })
-      return map
-    }
-
-    const myMap = await fetchRatingMap(myUserId)
-    const compareMap = compareUserId && compareUserId !== myUserId
-      ? await fetchRatingMap(compareUserId)
-      : null
-
-    const scores = {}
-    Object.entries(artistNameToSongIds).forEach(([artistId, nameMap]) => {
-      const getScore = (ratingMap) => {
-        const songRatings = Object.values(nameMap).map(ids => {
+      const getScore = (nameMap, ratingMap) => {
+        const ratings = Object.values(nameMap).map(ids => {
           const ratedId = ids.find(id => ratingMap[id] !== undefined)
           return ratedId !== undefined ? ratingMap[ratedId] : undefined
         }).filter(v => v !== undefined)
-
-        if (!songRatings.length) return null
-        return songRatings.reduce((s, v) => s + v, 0) / songRatings.length
+        if (!ratings.length) return null
+        return ratings.reduce((s, v) => s + v, 0) / ratings.length
       }
 
-      const getTens = (ratingMap) => {
+      const getTens = (nameMap, ratingMap) => {
         return Object.values(nameMap).filter(ids => {
           const ratedId = ids.find(id => ratingMap[id] !== undefined)
           return ratedId !== undefined && ratingMap[ratedId] === 10
         }).length
       }
 
-      scores[artistId] = {
-        myScore: getScore(myMap),
-        myTens: getTens(myMap),
-        compareScore: compareMap ? getScore(compareMap) : null,
-        compareTens: compareMap ? getTens(compareMap) : null,
-      }
-    })
+      const scores = {}
+      Object.entries(artistNameMap).forEach(([artistId, nameMap]) => {
+        scores[artistId] = {
+          myScore: getScore(nameMap, myRatingMap),
+          myTens: getTens(nameMap, myRatingMap),
+          compareScore: compareRatingMap ? getScore(nameMap, compareRatingMap) : null,
+          compareTens: compareRatingMap ? getTens(nameMap, compareRatingMap) : null,
+        }
+      })
 
-    setArtistScores(scores)
+      setArtistScores(scores)
+    } catch (err) {
+      console.error('loadArtistScores error:', err)
+    }
   }, [])
 
   useEffect(() => {
