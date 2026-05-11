@@ -235,6 +235,10 @@ export default function App() {
     if (!myUserId) return
 
     try {
+      // Ensure we have a valid session before querying
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
       const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
       const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
 
