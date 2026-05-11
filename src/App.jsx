@@ -242,12 +242,9 @@ export default function App() {
       const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
 
       // Fetch albums, songs, and ratings separately
-      const { data: allAlbums, error: e1 } = await supabase.from('albums').select('id, name, artist_id').limit(10000)
-      const { data: allSongs, error: e2 } = await supabase.from('songs').select('id, name, album_id').limit(10000)
-      const { data: myRatingsData, error: e3 } = await supabase.from('ratings').select('song_id, rating').eq('user_id', myUserId).limit(10000)
-
-      console.log('errors:', e1, e2, e3)
-      console.log('counts:', allAlbums?.length, allSongs?.length, myRatingsData?.length)
+      const { data: allAlbums } = await supabase.from('albums').select('id, name, artist_id').limit(10000)
+      const { data: allSongs } = await supabase.from('songs').select('id, name, album_id').limit(10000)
+      const { data: myRatingsData } = await supabase.from('ratings').select('song_id, rating').eq('user_id', myUserId).limit(10000)
 
       const myRatingMap = {}
       ;(myRatingsData || []).forEach(r => { myRatingMap[r.song_id] = r.rating })
