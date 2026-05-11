@@ -249,6 +249,15 @@ export default function App() {
       const myRatingMap = {}
       ;(myRatingsRes.data || []).forEach(r => { myRatingMap[r.song_id] = r.rating })
 
+      console.log('loadArtistScores debug:', {
+        albums: allAlbums.length,
+        songs: allSongs.length,
+        myRatings: Object.keys(myRatingMap).length,
+        albumsError: albumsRes.error,
+        songsError: songsRes.error,
+        ratingsError: myRatingsRes.error,
+      })
+
       // All albums (including non-albums — artist score includes everything)
       const albumToArtist = {}
       allAlbums.forEach(a => { albumToArtist[a.id] = a.artist_id })
