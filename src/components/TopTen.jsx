@@ -25,23 +25,21 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
 
     try {
       // Flat queries to avoid row limits
-      const [albumsRes, songsRes, ratingsRes] = await Promise.all([
+      const [albumsRes, songsRes, ratingsRes, artistsRes] = await Promise.all([
         supabase.from('albums').select('id, name, year, artist_id, image_url').limit(10000),
         supabase.from('songs').select('id, name, album_id').limit(10000),
         supabase.from('ratings').select('song_id, rating').eq('user_id', userId).limit(10000),
+        supabase.from('artists').select('id, name, image_url').limit(10000),
       ])
-
-      console.log('TopTen debug:', {
-        albums: albumsRes.data?.length, albumsErr: albumsRes.error,
-        songs: songsRes.data?.length, songsErr: songsRes.error,
-        ratings: ratingsRes.data?.length, ratingsErr: ratingsRes.error,
-        userId,
-      })
 
       const allAlbums = (albumsRes.data || []).filter(a => !isNonAlbum(a.name))
       const allSongs = songsRes.data || []
       const ratingMap = {}
       ;(ratingsRes.data || []).forEach(r => { ratingMap[r.song_id] = r.rating })
+
+      // Build artist lookup from fresh data
+      const artistMap = {}
+      ;(artistsRes.data || []).forEach(a => { artistMap[a.id] = a })
 
       // Build albumId -> songs map
       const albumSongMap = {}
@@ -49,10 +47,6 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
         if (!albumSongMap[s.album_id]) albumSongMap[s.album_id] = []
         albumSongMap[s.album_id].push(s)
       })
-
-      // Build artist lookup
-      const artistMap = {}
-      artists.forEach(a => { artistMap[a.id] = a })
 
       // Score each album — deduplicate songs by name within album
       const scored = allAlbums.map(album => {
