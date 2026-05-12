@@ -118,7 +118,7 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
       console.error('TopTen fetch error:', err)
       return []
     }
-  }, [artists])
+  }, [])
 
   useEffect(() => {
     const load = async () => {
@@ -127,8 +127,8 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
       setMyTopTen(mine)
       setLoading(false)
     }
-    if (user && artists.length > 0) load()
-  }, [user, artists, fetchTopTen])
+    if (user) load()
+  }, [user, fetchTopTen])
 
   useEffect(() => {
     const load = async () => {
