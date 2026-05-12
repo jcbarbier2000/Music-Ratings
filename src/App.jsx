@@ -455,31 +455,15 @@ export default function App() {
     if (!artistName) return
     setItunesArtistSearching(true)
     try {
-      // Search MusicBrainz for releases by this artist
-      const searchRes = await fetch(
-        `https://musicbrainz.org/ws/2/release/?query=artist:"${encodeURIComponent(artistName)}"&limit=9&fmt=json`,
-        { headers: { 'User-Agent': 'MusicRatingsApp/1.0' } }
-      )
-      const searchData = await searchRes.json()
-      const releases = searchData.releases || []
-
-      // Fetch cover art for each release
-      const results = []
-      for (const release of releases.slice(0, 12)) {
-        try {
-          const coverRes = await fetch(
-            `https://coverartarchive.org/release/${release.id}/front-250`,
-            { method: 'HEAD' }
-          )
-          if (coverRes.ok) {
-            results.push({
-              name: release.title,
-              image: `https://coverartarchive.org/release/${release.id}/front-500`,
-            })
-            if (results.length >= 9) break
-          }
-        } catch {}
-      }
+      const res = await fetch(`/api/itunes?term=${encodeURIComponent(artistName)}&entity=album&limit=9`)
+      const data = await res.json()
+      const seen = new Set()
+      const results = (data.results || [])
+        .filter(r => r.artworkUrl100 && !seen.has(r.artworkUrl100) && seen.add(r.artworkUrl100))
+        .map(r => ({
+          name: r.collectionName,
+          image: r.artworkUrl100.replace('100x100', '600x600'),
+        }))
       setItunesArtistResults(results)
     } catch (err) {
       console.error('Artist art search error:', err)
@@ -493,31 +477,14 @@ export default function App() {
     if (!artistName || !albumName) return
     setItunesSearching(true)
     try {
-      // Search MusicBrainz for this specific album
-      const searchRes = await fetch(
-        `https://musicbrainz.org/ws/2/release/?query=release:"${encodeURIComponent(albumName)}" AND artist:"${encodeURIComponent(artistName)}"&limit=9&fmt=json`,
-        { headers: { 'User-Agent': 'MusicRatingsApp/1.0' } }
-      )
-      const searchData = await searchRes.json()
-      const releases = searchData.releases || []
-
-      const results = []
-      for (const release of releases.slice(0, 12)) {
-        try {
-          const coverRes = await fetch(
-            `https://coverartarchive.org/release/${release.id}/front-250`,
-            { method: 'HEAD' }
-          )
-          if (coverRes.ok) {
-            results.push({
-              name: release.title,
-              year: release.date?.slice(0, 4),
-              image: `https://coverartarchive.org/release/${release.id}/front-500`,
-            })
-            if (results.length >= 6) break
-          }
-        } catch {}
-      }
+      const res = await fetch(`/api/itunes?term=${encodeURIComponent(`${artistName} ${albumName}`)}&entity=album&limit=6`)
+      const data = await res.json()
+      const results = (data.results || []).map(r => ({
+        name: r.collectionName,
+        artist: r.artistName,
+        year: r.releaseDate?.slice(0, 4),
+        image: r.artworkUrl100?.replace('100x100', '600x600'),
+      })).filter(r => r.image)
       setItunesResults(results)
     } catch (err) {
       console.error('Cover art search error:', err)
