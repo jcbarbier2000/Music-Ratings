@@ -22,7 +22,7 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
 
   const fetchTopTen = useCallback(async (userId) => {
     if (!userId) return []
-
+    console.log('fetchTopTen called with userId:', userId)
     try {
       // Flat queries to avoid row limits
       const [albumsRes, songsRes, ratingsRes, artistsRes] = await Promise.all([
