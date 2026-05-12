@@ -37,6 +37,14 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
       const ratingMap = {}
       ;(ratingsRes.data || []).forEach(r => { ratingMap[r.song_id] = r.rating })
 
+      console.log('TopTen scoring:', {
+        albums: allAlbums.length,
+        songs: allSongs.length,
+        ratings: Object.keys(ratingMap).length,
+        sampleAlbumId: allAlbums[0]?.id,
+        songsForFirstAlbum: albumSongMap ? 'building...' : 'not built',
+      })
+
       // Build artist lookup from fresh data
       const artistMap = {}
       ;(artistsRes.data || []).forEach(a => { artistMap[a.id] = a })
@@ -46,6 +54,13 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
       allSongs.forEach(s => {
         if (!albumSongMap[s.album_id]) albumSongMap[s.album_id] = []
         albumSongMap[s.album_id].push(s)
+      })
+
+      console.log('TopTen albumSongMap sample:', {
+        firstAlbumId: allAlbums[0]?.id,
+        firstAlbumName: allAlbums[0]?.name,
+        songsForFirstAlbum: albumSongMap[allAlbums[0]?.id]?.length,
+        totalAlbumIds: Object.keys(albumSongMap).length,
       })
 
       // Score each album — deduplicate songs by name within album
