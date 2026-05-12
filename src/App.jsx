@@ -37,10 +37,6 @@ export default function App() {
   const [editImageUrl, setEditImageUrl] = useState('')
   const [editDebutYear, setEditDebutYear] = useState('')
   const [editCountry, setEditCountry] = useState('')
-  const [itunesResults, setItunesResults] = useState([])
-  const [itunesSearching, setItunesSearching] = useState(false)
-  const [itunesArtistResults, setItunesArtistResults] = useState([])
-  const [itunesArtistSearching, setItunesArtistSearching] = useState(false)
   const [newAlbumName, setNewAlbumName] = useState('')
   const [newAlbumYear, setNewAlbumYear] = useState('')
   const [newAlbumImageUrl, setNewAlbumImageUrl] = useState('')
@@ -440,58 +436,12 @@ export default function App() {
     loadArtists()
   }
 
-  const openEditAlbum = async (album) => {
+  const openEditAlbum = (album) => {
     setEditingAlbum(album)
     setEditAlbumName(album.name)
     setEditAlbumYear(album.year || '')
     setEditAlbumImageUrl(album.image_url || '')
     setShowEditAlbum(true)
-    setItunesResults([])
-    // Auto-search iTunes for cover art
-    searchItunesCoverArt(selectedArtist?.name, album.name)
-  }
-
-  const searchItunesArtistPhoto = async (artistName) => {
-    if (!artistName) return
-    setItunesArtistSearching(true)
-    try {
-      const res = await fetch(`/api/itunes?term=${encodeURIComponent(artistName)}&entity=album&limit=9`)
-      const data = await res.json()
-      const seen = new Set()
-      const results = (data.results || [])
-        .filter(r => r.artworkUrl100 && !seen.has(r.artworkUrl100) && seen.add(r.artworkUrl100))
-        .map(r => ({
-          name: r.collectionName,
-          image: r.artworkUrl100.replace('100x100', '600x600'),
-        }))
-      setItunesArtistResults(results)
-    } catch (err) {
-      console.error('Artist art search error:', err)
-      setItunesArtistResults([])
-    } finally {
-      setItunesArtistSearching(false)
-    }
-  }
-
-  const searchItunesCoverArt = async (artistName, albumName) => {
-    if (!artistName || !albumName) return
-    setItunesSearching(true)
-    try {
-      const res = await fetch(`/api/itunes?term=${encodeURIComponent(`${artistName} ${albumName}`)}&entity=album&limit=6`)
-      const data = await res.json()
-      const results = (data.results || []).map(r => ({
-        name: r.collectionName,
-        artist: r.artistName,
-        year: r.releaseDate?.slice(0, 4),
-        image: r.artworkUrl100?.replace('100x100', '600x600'),
-      })).filter(r => r.image)
-      setItunesResults(results)
-    } catch (err) {
-      console.error('Cover art search error:', err)
-      setItunesResults([])
-    } finally {
-      setItunesSearching(false)
-    }
   }
 
   const saveAlbumEdit = async () => {
@@ -920,9 +870,7 @@ export default function App() {
                     setEditImageUrl(selectedArtist.image_url || '')
                     setEditDebutYear(selectedArtist.debut_year || '')
                     setEditCountry(selectedArtist.country || '')
-                    setItunesArtistResults([])
                     setShowEditArtist(true)
-                    searchItunesArtistPhoto(selectedArtist.name)
                   }}
                     className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-xl transition-colors self-start sm:flex-shrink-0">
                     Edit Info
@@ -1253,7 +1201,7 @@ export default function App() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
               <h2 className="text-xl font-bold text-white">Edit Album</h2>
-              <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null); setItunesResults([]) }}
+              <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null) }}
                 className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"><X className="w-5 h-5 text-zinc-400" /></button>
             </div>
             <div className="p-6 space-y-4">
@@ -1267,69 +1215,10 @@ export default function App() {
                 <input value={editAlbumYear} onChange={e => setEditAlbumYear(e.target.value)} placeholder="e.g. 1997"
                   className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
-
-              {/* iTunes cover art suggestions */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs text-zinc-400 uppercase tracking-widest">Cover Art</label>
-                  <button
-                    onClick={() => searchItunesCoverArt(selectedArtist?.name, editAlbumName)}
-                    className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
-                  >
-                    {itunesSearching ? 'Searching...' : '↺ Search iTunes'}
-                  </button>
-                </div>
-
-                {/* Current image */}
-                {editAlbumImageUrl && (
-                  <div className="flex items-center gap-3 mb-3">
-                    <img src={editAlbumImageUrl} alt="Current cover"
-                      className="w-16 h-16 rounded-lg object-cover border border-zinc-700" />
-                    <div className="flex-1">
-                      <p className="text-xs text-zinc-400">Current cover</p>
-                      <button onClick={() => setEditAlbumImageUrl('')}
-                        className="text-xs text-red-400 hover:text-red-300 mt-1">Remove</button>
-                    </div>
-                  </div>
-                )}
-
-                {/* iTunes results grid */}
-                {itunesSearching && (
-                  <div className="text-center py-4 text-zinc-500 text-sm">Searching iTunes...</div>
-                )}
-                {!itunesSearching && itunesResults.length > 0 && (
-                  <div>
-                    <p className="text-xs text-zinc-500 mb-2">Click to select:</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {itunesResults.map((r, i) => (
-                        <button key={i} onClick={() => setEditAlbumImageUrl(r.image)}
-                          className={`relative rounded-lg overflow-hidden border-2 transition-all ${editAlbumImageUrl === r.image ? 'border-violet-500' : 'border-zinc-700 hover:border-violet-500/50'}`}
-                          title={`${r.name} (${r.year})`}
-                        >
-                          <img src={r.image} alt={r.name} className="w-full aspect-square object-cover" />
-                          {editAlbumImageUrl === r.image && (
-                            <div className="absolute inset-0 bg-violet-500/20 flex items-center justify-center">
-                              <span className="text-white text-lg">✓</span>
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {!itunesSearching && itunesResults.length === 0 && !editAlbumImageUrl && (
-                  <p className="text-xs text-zinc-600">No results found — try uploading manually below</p>
-                )}
-
-                {/* Manual upload fallback */}
-                <div className="mt-3">
-                  <ImageUpload bucket="album-images" existingUrl={null} onUpload={url => setEditAlbumImageUrl(url || '')} label="Or upload manually" />
-                </div>
-              </div>
-
+              <ImageUpload bucket="album-images" existingUrl={editAlbumImageUrl} onUpload={url => setEditAlbumImageUrl(url || '')} label="Album Cover" />
               <div className="flex gap-3 pt-2">
                 <button onClick={saveAlbumEdit} className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl transition-colors">Save</button>
-                <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null); setItunesResults([]) }}
+                <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null) }}
                   className="px-6 py-3 border border-zinc-700 text-zinc-300 rounded-xl hover:bg-zinc-800 transition-colors">Cancel</button>
               </div>
             </div>
@@ -1348,53 +1237,7 @@ export default function App() {
               </button>
             </div>
             <div className="p-6 space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs text-zinc-400 uppercase tracking-widest">Artist Photo</label>
-                  <button onClick={() => searchItunesArtistPhoto(selectedArtist?.name)}
-                    className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
-                    {itunesArtistSearching ? 'Searching...' : '↺ Search iTunes'}
-                  </button>
-                </div>
-
-                {editImageUrl && (
-                  <div className="flex items-center gap-3 mb-3">
-                    <img src={editImageUrl} alt="Current" className="w-16 h-16 rounded-xl object-cover border border-zinc-700" />
-                    <div>
-                      <p className="text-xs text-zinc-400">Current photo</p>
-                      <button onClick={() => setEditImageUrl('')} className="text-xs text-red-400 hover:text-red-300 mt-1">Remove</button>
-                    </div>
-                  </div>
-                )}
-
-                {itunesArtistSearching && (
-                  <div className="text-center py-3 text-zinc-500 text-sm">Searching iTunes...</div>
-                )}
-                {!itunesArtistSearching && itunesArtistResults.length > 0 && (
-                  <div>
-                    <p className="text-xs text-zinc-500 mb-2">Select an album cover to use as artist photo:</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {itunesArtistResults.map((r, i) => (
-                        <button key={i} onClick={() => setEditImageUrl(r.image)}
-                          className={`relative rounded-lg overflow-hidden border-2 transition-all ${editImageUrl === r.image ? 'border-violet-500' : 'border-zinc-700 hover:border-violet-500/50'}`}
-                          title={r.name}
-                        >
-                          <img src={r.image} alt={r.name} className="w-full aspect-square object-cover" />
-                          {editImageUrl === r.image && (
-                            <div className="absolute inset-0 bg-violet-500/20 flex items-center justify-center">
-                              <span className="text-white text-lg">✓</span>
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-3">
-                  <ImageUpload bucket="artist-images" existingUrl={null} onUpload={url => setEditImageUrl(url || '')} label="Or upload manually" />
-                </div>
-              </div>
+              <ImageUpload bucket="artist-images" existingUrl={editImageUrl} onUpload={url => setEditImageUrl(url || '')} label="Artist Photo" />
               <div>
                 <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">Genre</label>
                 <input value={editGenre} onChange={e => setEditGenre(e.target.value)} placeholder="e.g. Alternative Rock"
