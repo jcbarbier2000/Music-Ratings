@@ -79,14 +79,23 @@ export default function App() {
 
   // Store the intended slug from the URL on initial load
   const pendingSlugRef = useRef(
-    window.location.pathname.match(/^\/artist\/(.+)$/)?.[1] || null
+    window.location.pathname.match(/^\/artist\/(.+)$/)?.[1] ||
+    (window.location.pathname === '/monthly' ? 'monthly' : null) ||
+    (window.location.pathname === '/topten' ? 'topten' : null) ||
+    (window.location.pathname === '/requests' ? 'requests' : null)
   )
 
-  // Sync page state to URL — but only if we're not mid-restore
+  // Sync page state to URL
   useEffect(() => {
-    if (pendingSlugRef.current) return // don't overwrite URL while restoring
+    if (pendingSlugRef.current) return
     if (page === 'artist' && selectedArtist) {
       window.history.replaceState(null, '', `/artist/${slugify(selectedArtist.name)}`)
+    } else if (page === 'monthly') {
+      window.history.replaceState(null, '', '/monthly')
+    } else if (page === 'topten') {
+      window.history.replaceState(null, '', '/topten')
+    } else if (page === 'requests') {
+      window.history.replaceState(null, '', '/requests')
     } else {
       window.history.replaceState(null, '', '/')
     }
@@ -94,15 +103,21 @@ export default function App() {
 
   // Restore page from URL once artists are loaded
   useEffect(() => {
-    if (!pendingSlugRef.current || artists.length === 0) return
+    if (!pendingSlugRef.current) return
     const slug = pendingSlugRef.current
+    if (['monthly', 'topten', 'requests'].includes(slug)) {
+      pendingSlugRef.current = null
+      setPage(slug)
+      return
+    }
+    if (artists.length === 0) return
     const artist = artists.find(a => slugify(a.name) === slug)
     if (artist) {
-      pendingSlugRef.current = null // clear so URL sync works normally after
+      pendingSlugRef.current = null
       setSelectedArtist(artist)
       setPage('artist')
     } else {
-      pendingSlugRef.current = null // slug not found, go home
+      pendingSlugRef.current = null
     }
   }, [artists])
 
