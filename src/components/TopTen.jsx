@@ -31,6 +31,13 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
         supabase.from('ratings').select('song_id, rating').eq('user_id', userId).limit(10000),
       ])
 
+      console.log('TopTen debug:', {
+        albums: albumsRes.data?.length, albumsErr: albumsRes.error,
+        songs: songsRes.data?.length, songsErr: songsRes.error,
+        ratings: ratingsRes.data?.length, ratingsErr: ratingsRes.error,
+        userId,
+      })
+
       const allAlbums = (albumsRes.data || []).filter(a => !isNonAlbum(a.name))
       const allSongs = songsRes.data || []
       const ratingMap = {}
