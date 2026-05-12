@@ -2,14 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Trophy, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
+const NON_ALBUM_LABELS = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
+const isNonAlbum = (name) => NON_ALBUM_LABELS.some(label => name.toLowerCase().trim().includes(label))
+
 export default function TopTen({ user, profile, adminProfile, allProfiles, artists, onNavigateToArtist }) {
   const [compareUser, setCompareUser] = useState(null)
   const [myTopTen, setMyTopTen] = useState([])
   const [compareTopTen, setCompareTopTen] = useState([])
   const [loading, setLoading] = useState(true)
-
-  const NON_ALBUM_LABELS = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
-  const isNonAlbum = (name) => NON_ALBUM_LABELS.some(label => name.toLowerCase().trim().includes(label))
 
   useEffect(() => {
     if (adminProfile && adminProfile.id !== user?.id) {
