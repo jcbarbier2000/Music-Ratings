@@ -455,7 +455,7 @@ export default function App() {
     if (!artistName) return
     setItunesArtistSearching(true)
     try {
-      const res = await fetch(`/api/itunes?term=${encodeURIComponent(artistName)}&entity=album&limit=9`)
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artistName)}&entity=album&limit=9&media=music`)
       const data = await res.json()
       // Get unique album covers as proxy for artist images
       const seen = new Set()
@@ -477,7 +477,7 @@ export default function App() {
     if (!artistName || !albumName) return
     setItunesSearching(true)
     try {
-      const res = await fetch(`/api/itunes?term=${encodeURIComponent(`${artistName} ${albumName}`)}&entity=album&limit=6`)
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(`${artistName} ${albumName}`)}&entity=album&limit=6&media=music`)
       const data = await res.json()
       const results = (data.results || []).map(r => ({
         name: r.collectionName,
