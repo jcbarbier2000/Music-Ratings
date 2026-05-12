@@ -1,9 +1,91 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Trophy, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
-const NON_ALBUM_LABELS = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
-const isNonAlbum = (name) => NON_ALBUM_LABELS.some(label => name.toLowerCase().trim().includes(label))
+const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
+const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
+
+async function fetchTopTen(userId) {
+  if (!userId) return []
+  try {
+    const [albumsRes, songsRes, ratingsRes, artistsRes] = await Promise.all([
+      supabase.from('albums').select('id, name, year, artist_id, image_url').limit(10000),
+      supabase.from('songs').select('id, name, album_id').limit(10000),
+      supabase.from('ratings').select('song_id, rating').eq('user_id', userId).limit(10000),
+      supabase.from('artists').select('id, name, image_url').limit(10000),
+    ])
+
+    const allAlbums = (albumsRes.data || []).filter(a => !isNonAlbum(a.name))
+    const allSongs = songsRes.data || []
+    const ratingMap = {}
+    ;(ratingsRes.data || []).forEach(r => { ratingMap[r.song_id] = r.rating })
+    const artistMap = {}
+    ;(artistsRes.data || []).forEach(a => { artistMap[a.id] = a })
+
+    // Build albumId -> songs map
+    const albumSongMap = {}
+    allSongs.forEach(s => {
+      if (!albumSongMap[s.album_id]) albumSongMap[s.album_id] = []
+      albumSongMap[s.album_id].push(s)
+    })
+
+    // Score each album
+    const scored = allAlbums.map(album => {
+      const songs = albumSongMap[album.id] || []
+      const seenNames = new Set()
+      const uniqueSongs = songs.filter(s => {
+        const key = s.name.toLowerCase().trim()
+        if (seenNames.has(key)) return false
+        seenNames.add(key)
+        return true
+      })
+      const rated = uniqueSongs.map(s => ratingMap[s.id]).filter(v => v !== undefined)
+      if (!rated.length) return null
+      const avg = rated.reduce((s, v) => s + v, 0) / rated.length
+      const artist = artistMap[album.artist_id]
+      return {
+        albumId: album.id,
+        albumName: album.name,
+        albumYear: album.year,
+        albumImage: album.image_url,
+        artistId: album.artist_id,
+        artistName: artist?.name || '',
+        avg,
+        ratedCount: rated.length,
+        totalCount: uniqueSongs.length,
+        complete: rated.length === uniqueSongs.length,
+      }
+    }).filter(Boolean).sort((a, b) => b.avg - a.avg)
+
+    // Assign ranks with ties
+    const result = []
+    let rank = 1
+    let i = 0
+    while (i < scored.length) {
+      const group = [scored[i]]
+      while (i + 1 < scored.length && Math.abs(scored[i + 1].avg - scored[i].avg) < 0.001) {
+        i++
+        group.push(scored[i])
+      }
+      if (rank <= 10) {
+        group.forEach(a => result.push({ ...a, rank, tied: group.length > 1 }))
+      }
+      rank += group.length
+      i++
+    }
+    return result
+  } catch (err) {
+    console.error('TopTen error:', err)
+    return []
+  }
+}
+
+const rankColor = (rank) => {
+  if (rank === 1) return 'text-amber-400'
+  if (rank === 2) return 'text-zinc-300'
+  if (rank === 3) return 'text-amber-600'
+  return 'text-zinc-600'
+}
 
 export default function TopTen({ user, profile, adminProfile, allProfiles, artists, onNavigateToArtist }) {
   const [compareUser, setCompareUser] = useState(null)
@@ -20,131 +102,19 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
     }
   }, [adminProfile, allProfiles, user])
 
-  const fetchTopTen = useCallback(async (userId) => {
-    if (!userId) return []
-    console.log('fetchTopTen called with userId:', userId)
-    try {
-      // Flat queries to avoid row limits
-      const [albumsRes, songsRes, ratingsRes, artistsRes] = await Promise.all([
-        supabase.from('albums').select('id, name, year, artist_id, image_url').limit(10000),
-        supabase.from('songs').select('id, name, album_id').limit(10000),
-        supabase.from('ratings').select('song_id, rating').eq('user_id', userId).limit(10000),
-        supabase.from('artists').select('id, name, image_url').limit(10000),
-      ])
-
-      const allAlbums = (albumsRes.data || []).filter(a => !isNonAlbum(a.name))
-      const allSongs = songsRes.data || []
-      const ratingMap = {}
-      ;(ratingsRes.data || []).forEach(r => { ratingMap[r.song_id] = r.rating })
-
-      console.log('TopTen scoring:', {
-        albums: allAlbums.length,
-        songs: allSongs.length,
-        ratings: Object.keys(ratingMap).length,
-        sampleAlbumId: allAlbums[0]?.id,
-        songsForFirstAlbum: albumSongMap ? 'building...' : 'not built',
-      })
-
-      // Build artist lookup from fresh data
-      const artistMap = {}
-      ;(artistsRes.data || []).forEach(a => { artistMap[a.id] = a })
-
-      // Build albumId -> songs map
-      const albumSongMap = {}
-      allSongs.forEach(s => {
-        if (!albumSongMap[s.album_id]) albumSongMap[s.album_id] = []
-        albumSongMap[s.album_id].push(s)
-      })
-
-      console.log('TopTen albumSongMap sample:', {
-        firstAlbumId: allAlbums[0]?.id,
-        firstAlbumName: allAlbums[0]?.name,
-        songsForFirstAlbum: albumSongMap[allAlbums[0]?.id]?.length,
-        totalAlbumIds: Object.keys(albumSongMap).length,
-      })
-
-      // Score each album — deduplicate songs by name within album
-      const scored = allAlbums.map(album => {
-        const songs = albumSongMap[album.id] || []
-        // Deduplicate by song name
-        const seenNames = new Set()
-        const uniqueSongs = songs.filter(s => {
-          const key = s.name.toLowerCase().trim()
-          if (seenNames.has(key)) return false
-          seenNames.add(key)
-          return true
-        })
-
-        const rated = uniqueSongs.map(s => ratingMap[s.id]).filter(v => v !== undefined)
-        if (!rated.length) return null
-
-        const avg = rated.reduce((s, v) => s + v, 0) / rated.length
-        const artist = artistMap[album.artist_id]
-
-        return {
-          albumId: album.id,
-          albumName: album.name,
-          albumYear: album.year,
-          albumImage: album.image_url,
-          artistId: album.artist_id,
-          artistName: artist?.name || '',
-          artistImage: artist?.image_url,
-          avg,
-          ratedCount: rated.length,
-          totalCount: uniqueSongs.length,
-          complete: rated.length === uniqueSongs.length,
-        }
-      }).filter(Boolean).sort((a, b) => b.avg - a.avg)
-
-      // Assign ranks with ties, include all tied at rank 10
-      const result = []
-      let currentRank = 1
-      let i = 0
-      while (i < scored.length) {
-        const group = [scored[i]]
-        while (i + 1 < scored.length && Math.abs(scored[i + 1].avg - scored[i].avg) < 0.001) {
-          i++
-          group.push(scored[i])
-        }
-        if (currentRank <= 10) {
-          group.forEach(album => result.push({ ...album, rank: currentRank, tied: group.length > 1 }))
-        }
-        currentRank += group.length
-        i++
-      }
-
-      return result
-    } catch (err) {
-      console.error('TopTen fetch error:', err)
-      return []
-    }
-  }, [])
-
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      const mine = await fetchTopTen(user?.id)
-      setMyTopTen(mine)
+    if (!user) return
+    setLoading(true)
+    fetchTopTen(user.id).then(data => {
+      setMyTopTen(data)
       setLoading(false)
-    }
-    if (user) load()
-  }, [user, fetchTopTen])
+    })
+  }, [user])
 
   useEffect(() => {
-    const load = async () => {
-      if (!compareUser) { setCompareTopTen([]); return }
-      const theirs = await fetchTopTen(compareUser.id)
-      setCompareTopTen(theirs)
-    }
-    load()
-  }, [compareUser, fetchTopTen])
-
-  const rankColor = (rank) => {
-    if (rank === 1) return 'text-amber-400'
-    if (rank === 2) return 'text-zinc-300'
-    if (rank === 3) return 'text-amber-600'
-    return 'text-zinc-600'
-  }
+    if (!compareUser) { setCompareTopTen([]); return }
+    fetchTopTen(compareUser.id).then(setCompareTopTen)
+  }, [compareUser])
 
   const TopTenTable = ({ title, items, emptyMessage, headerRight }) => (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
@@ -155,19 +125,17 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
         </div>
         {headerRight}
       </div>
-
       {items.length === 0 ? (
         <div className="px-6 py-12 text-center text-zinc-600 text-sm">{emptyMessage}</div>
       ) : (
         <div className="divide-y divide-zinc-800/60">
-          {items.map((item) => (
+          {items.map(item => (
             <div key={item.albumId}
               className={`flex items-center gap-4 px-5 py-3.5 hover:bg-zinc-800/30 transition-colors ${item.rank <= 3 ? 'border-l-2 ' + (item.rank === 1 ? 'border-amber-400/40' : item.rank === 2 ? 'border-zinc-400/30' : 'border-amber-600/40') : ''}`}
             >
               <span className={`font-bold text-base w-8 text-center flex-shrink-0 ${rankColor(item.rank)}`}>
                 {item.tied ? `T${item.rank}` : item.rank}
               </span>
-
               {item.albumImage ? (
                 <img src={item.albumImage} alt={item.albumName}
                   className="w-11 h-11 rounded-lg object-cover border border-zinc-700 flex-shrink-0" />
@@ -176,7 +144,6 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
                   <Trophy className="w-5 h-5 text-zinc-600" />
                 </div>
               )}
-
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-white text-sm truncate">{item.albumName}</div>
                 <button
@@ -190,16 +157,11 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
                 </button>
                 <div className="flex items-center gap-2 mt-0.5">
                   {item.albumYear && <span className="text-xs text-zinc-600">{item.albumYear}</span>}
-                  {!item.complete && (
-                    <span className="text-xs text-zinc-600">({item.ratedCount}/{item.totalCount} songs)</span>
-                  )}
+                  {!item.complete && <span className="text-xs text-zinc-600">({item.ratedCount}/{item.totalCount} songs)</span>}
                 </div>
               </div>
-
               <div className="text-right flex-shrink-0">
-                <span className={`text-lg font-bold ${rankColor(item.rank)}`}>
-                  {item.avg.toFixed(2)}
-                </span>
+                <span className={`text-lg font-bold ${rankColor(item.rank)}`}>{item.avg.toFixed(2)}</span>
               </div>
             </div>
           ))}
@@ -216,7 +178,6 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
         <h1 className="text-3xl font-bold text-white">Album Top 10</h1>
         <p className="text-zinc-500 text-sm mt-1">Ranked by average song rating · includes partially rated albums</p>
       </div>
-
       {loading ? (
         <div className="text-center py-16 text-zinc-600">Calculating rankings...</div>
       ) : (
@@ -226,7 +187,6 @@ export default function TopTen({ user, profile, adminProfile, allProfiles, artis
             items={myTopTen}
             emptyMessage="Rate some albums to see your top 10"
           />
-
           <TopTenTable
             title={compareUser ? `${compareUser.username}'s Top 10` : "— 's Top 10"}
             items={compareTopTen}
