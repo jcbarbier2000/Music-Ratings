@@ -32,6 +32,7 @@ export default function App() {
   const [editAlbumName, setEditAlbumName] = useState('')
   const [editAlbumYear, setEditAlbumYear] = useState('')
   const [editAlbumImageUrl, setEditAlbumImageUrl] = useState('')
+  const [newSongName, setNewSongName] = useState('')
   const [editGenre, setEditGenre] = useState('')
   const [editSubgenre, setEditSubgenre] = useState('')
   const [editImageUrl, setEditImageUrl] = useState('')
@@ -454,7 +455,38 @@ export default function App() {
     ))
   }
 
-  const albumAvg = (songs, ratingMap) => {
+  const addSong = async () => {
+    if (!newSongName.trim() || !editingAlbum) return
+    const trackOrder = editingAlbum.songs.length
+    const { data: s } = await supabase
+      .from('songs')
+      .insert({ album_id: editingAlbum.id, name: newSongName.trim(), track_order: trackOrder })
+      .select().single()
+    if (s) {
+      setArtistDetail(prev => ({
+        ...prev,
+        albums: prev.albums.map(a => a.id === editingAlbum.id
+          ? { ...a, songs: [...a.songs, s] }
+          : a
+        )
+      }))
+      setEditingAlbum(prev => ({ ...prev, songs: [...prev.songs, s] }))
+      setNewSongName('')
+    }
+  }
+
+  const deleteSong = async (songId, songName) => {
+    if (!confirm(`Delete "${songName}"? This will also delete all ratings for this song.`)) return
+    await supabase.from('songs').delete().eq('id', songId)
+    setArtistDetail(prev => ({
+      ...prev,
+      albums: prev.albums.map(a => a.id === editingAlbum.id
+        ? { ...a, songs: a.songs.filter(s => s.id !== songId) }
+        : a
+      )
+    }))
+    setEditingAlbum(prev => ({ ...prev, songs: prev.songs.filter(s => s.id !== songId) }))
+  }
     const vals = songs.filter(s => !s.excluded).map(s => {
       const nameKey = s.name.toLowerCase().trim()
       return ratingMap[s.id] || ratingMap.__nameMap?.[nameKey] || 0
@@ -1258,7 +1290,7 @@ export default function App() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
               <h2 className="text-xl font-bold text-white">Edit Album</h2>
-              <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null) }}
+              <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null); setNewSongName('') }}
                 className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"><X className="w-5 h-5 text-zinc-400" /></button>
             </div>
             <div className="p-6 space-y-4">
@@ -1273,9 +1305,45 @@ export default function App() {
                   className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
               <ImageUpload bucket="album-images" existingUrl={editAlbumImageUrl} onUpload={url => setEditAlbumImageUrl(url || '')} label="Album Cover" />
+
+              {/* Song management */}
+              <div>
+                <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">
+                  Songs <span className="text-zinc-600 normal-case tracking-normal">({editingAlbum.songs.length})</span>
+                </label>
+                <div className="bg-zinc-800/50 rounded-xl border border-zinc-700 divide-y divide-zinc-700/60 max-h-48 overflow-y-auto mb-2">
+                  {editingAlbum.songs.map((song, idx) => (
+                    <div key={song.id} className="flex items-center gap-3 px-3 py-2">
+                      <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0">{idx + 1}</span>
+                      <span className="text-zinc-300 text-sm flex-1 truncate">{song.name}</span>
+                      <button
+                        onClick={() => deleteSong(song.id, song.name)}
+                        className="p-1 text-zinc-600 hover:text-red-400 transition-colors flex-shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {/* Add song */}
+                <div className="flex gap-2">
+                  <input
+                    value={newSongName}
+                    onChange={e => setNewSongName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addSong()}
+                    placeholder="Add a song..."
+                    className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  />
+                  <button onClick={addSong}
+                    className="px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl transition-colors">
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <button onClick={saveAlbumEdit} className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl transition-colors">Save</button>
-                <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null) }}
+                <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null); setNewSongName('') }}
                   className="px-6 py-3 border border-zinc-700 text-zinc-300 rounded-xl hover:bg-zinc-800 transition-colors">Cancel</button>
               </div>
             </div>
