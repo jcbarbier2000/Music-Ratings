@@ -385,8 +385,13 @@ export default function App() {
         .from('ratings').select('song_id, rating')
         .eq('user_id', user.id).in('song_id', songIds)
       const map = {}
+      const nameMap = {} // songName -> rating (for duplicate song display)
       ;(ur || []).forEach(r => { map[r.song_id] = r.rating })
-      setUserRatings(map)
+      // Build name lookup from all songs in this artist's albums
+      sorted.flatMap(a => a.songs).forEach(s => {
+        if (map[s.id]) nameMap[s.name.toLowerCase().trim()] = map[s.id]
+      })
+      setUserRatings({ ...map, __nameMap: nameMap })
     }
     setDataLoading(false)
   }, [user])
@@ -406,6 +411,12 @@ export default function App() {
       .eq('user_id', compareProfile.id).in('song_id', songIds)
     const cmap = {}
     ;(cr || []).forEach(r => { cmap[r.song_id] = r.rating })
+    // Build name lookup for duplicate songs
+    if (artistDetail) {
+      artistDetail.albums.flatMap(a => a.songs).forEach(s => {
+        if (cmap[s.id]) cmap.__nameMap = { ...(cmap.__nameMap || {}), [s.name.toLowerCase().trim()]: cmap[s.id] }
+      })
+    }
     setCompareRatings(cmap)
   }, [compareProfile, user])
 
@@ -420,8 +431,27 @@ export default function App() {
   }, [selectedArtist, loadArtistDetail])
 
   const rate = async (songId, rating) => {
-    setUserRatings(prev => ({ ...prev, [songId]: rating }))
-    await supabase.rpc('upsert_rating', { p_song_id: songId, p_rating: rating })
+    // Find all songs with the same name across all albums for this artist
+    const ratedSong = artistDetail?.albums.flatMap(a => a.songs).find(s => s.id === songId)
+    const nameKey = ratedSong?.name?.toLowerCase().trim()
+    const allMatchingIds = nameKey
+      ? artistDetail.albums.flatMap(a => a.songs)
+          .filter(s => s.name.toLowerCase().trim() === nameKey)
+          .map(s => s.id)
+      : [songId]
+
+    // Update local state for all matching IDs
+    setUserRatings(prev => {
+      const updated = { ...prev }
+      allMatchingIds.forEach(id => { updated[id] = rating })
+      if (nameKey) updated.__nameMap = { ...(prev.__nameMap || {}), [nameKey]: rating }
+      return updated
+    })
+
+    // Save to database for all matching song IDs
+    await Promise.all(allMatchingIds.map(id =>
+      supabase.rpc('upsert_rating', { p_song_id: id, p_rating: rating })
+    ))
   }
 
   const albumAvg = (songs, ratingMap) => {
@@ -1026,8 +1056,9 @@ export default function App() {
                       {!isCollapsed && (
                         <div className="divide-y divide-zinc-800/60">
                           {album.songs.map((song, idx) => {
-                            const uRating = userRatings[song.id] || 0
-                            const aRating = compareProfile?.id !== user?.id ? (compareRatings[song.id] || 0) : 0
+                            const nameKey = song.name.toLowerCase().trim()
+                            const uRating = userRatings[song.id] || userRatings.__nameMap?.[nameKey] || 0
+                            const aRating = compareProfile?.id !== user?.id ? (compareRatings[song.id] || compareRatings.__nameMap?.[nameKey] || 0) : 0
                             const isExcluded = song.excluded
                             return (
                               <div key={song.id} className={`px-4 sm:px-6 py-3 hover:bg-zinc-800/30 transition-colors ${isExcluded ? 'opacity-40' : ''}`}>
