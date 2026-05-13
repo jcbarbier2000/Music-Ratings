@@ -15,6 +15,8 @@ export const COUNTRIES = {
   CH: 'Switzerland', TW: 'Taiwan', TH: 'Thailand', TR: 'Turkey', UA: 'Ukraine',
   GB: 'United Kingdom', US: 'United States', UY: 'Uruguay', VE: 'Venezuela',
   VN: 'Vietnam', YE: 'Yemen', ZW: 'Zimbabwe',
+  // Custom aliases
+  EN: 'England',
 }
 
 export const getCountryName = (code) => {
@@ -23,6 +25,8 @@ export const getCountryName = (code) => {
 }
 
 export const getFlagUrl = (code) => {
-  if (!code || code.length !== 2) return null
-  return `https://flagcdn.com/24x18/${code.toLowerCase()}.png`
+  if (!code || code.length < 2) return null
+  // Map custom aliases to real ISO codes for flags
+  const flagCode = code.toUpperCase() === 'EN' ? 'gb-eng' : code.toLowerCase()
+  return `https://flagcdn.com/24x18/${flagCode}.png`
 }
