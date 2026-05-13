@@ -455,7 +455,10 @@ export default function App() {
   }
 
   const albumAvg = (songs, ratingMap) => {
-    const vals = songs.filter(s => !s.excluded).map(s => ratingMap[s.id] || 0).filter(v => v > 0)
+    const vals = songs.filter(s => !s.excluded).map(s => {
+      const nameKey = s.name.toLowerCase().trim()
+      return ratingMap[s.id] || ratingMap.__nameMap?.[nameKey] || 0
+    }).filter(v => v > 0)
     if (!vals.length) return null
     return (vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2)
   }
