@@ -487,6 +487,8 @@ export default function App() {
     }))
     setEditingAlbum(prev => ({ ...prev, songs: prev.songs.filter(s => s.id !== songId) }))
   }
+
+  const albumAvg = (songs, ratingMap) => {
     const vals = songs.filter(s => !s.excluded).map(s => {
       const nameKey = s.name.toLowerCase().trim()
       return ratingMap[s.id] || ratingMap.__nameMap?.[nameKey] || 0
