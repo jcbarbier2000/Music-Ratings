@@ -140,7 +140,7 @@ export default function App() {
 
       const [albumsRes, songsRes, artistsRes, adminRatingsRes] = await Promise.all([
         supabase.from('albums').select('id, name, artist_id').limit(10000),
-        supabase.from('songs').select('id, name, album_id').limit(10000),
+        supabase.from('songs').select('id, name, album_id, excluded').limit(10000),
         supabase.from('artists').select('id').limit(10000),
         supabase.from('ratings').select('song_id').eq('user_id', adminProfile.id).limit(10000),
       ])
@@ -164,6 +164,7 @@ export default function App() {
       const buildSongMap = (ratedIds) => {
         const map = {}
         allSongs.forEach(s => {
+          if (s.excluded) return
           const artistId = albumToArtist[s.album_id]
           if (!artistId) return
           if (!map[artistId]) map[artistId] = {}
@@ -187,6 +188,7 @@ export default function App() {
         // Build album -> canonical song IDs
         const albumSongs = {}
         allSongs.forEach(s => {
+          if (s.excluded) return
           const artistId = albumToArtist[s.album_id]
           if (!artistId) return
           const key = s.name.toLowerCase().trim()
@@ -258,7 +260,7 @@ export default function App() {
 
       // Fetch albums, songs, and ratings separately
       const { data: allAlbums } = await supabase.from('albums').select('id, name, artist_id').limit(10000)
-      const { data: allSongs } = await supabase.from('songs').select('id, name, album_id').limit(10000)
+      const { data: allSongs } = await supabase.from('songs').select('id, name, album_id, excluded').limit(10000)
       const { data: myRatingsData } = await supabase.from('ratings').select('song_id, rating').eq('user_id', myUserId).limit(10000)
 
       const myRatingMap = {}
@@ -278,8 +280,10 @@ export default function App() {
 
       // Build artistId -> songName -> [all song IDs with that name]
       // Include ALL albums (Singles etc.) to match spreadsheet behavior
+      // Skip excluded songs (marked with 'x' in CSV)
       const artistNameMap = {} // artistId -> songName -> [songIds]
       allSongs.forEach(s => {
+        if (s.excluded) return
         const artistId = albumToArtist[s.album_id]
         if (!artistId) return
         if (!artistNameMap[artistId]) artistNameMap[artistId] = {}
@@ -361,7 +365,7 @@ export default function App() {
     setDataLoading(true)
     const { data: albums } = await supabase
       .from('albums')
-      .select('*, songs(id, name, track_order)')
+      .select('*, songs(id, name, track_order, excluded)')
       .eq('artist_id', artist.id)
       .order('year', { ascending: true, nullsFirst: false })
 
@@ -421,7 +425,7 @@ export default function App() {
   }
 
   const albumAvg = (songs, ratingMap) => {
-    const vals = songs.map(s => ratingMap[s.id] || 0).filter(v => v > 0)
+    const vals = songs.filter(s => !s.excluded).map(s => ratingMap[s.id] || 0).filter(v => v > 0)
     if (!vals.length) return null
     return (vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2)
   }
@@ -834,7 +838,7 @@ export default function App() {
                     <div className="flex gap-4 mt-2 text-xs sm:text-sm text-zinc-500">
                       <span className="flex items-center gap-1"><Disc className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{albumCount(artistDetail?.albums)} albums & EPs</span>
                       <span className="flex items-center gap-1"><ListMusic className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{
-                        new Set(artistDetail?.albums.flatMap(a => a.songs.map(s => s.name.toLowerCase().trim()))).size || 0
+                        new Set(artistDetail?.albums.flatMap(a => a.songs.filter(s => !s.excluded).map(s => s.name.toLowerCase().trim()))).size || 0
                       } songs</span>
                     </div>
                     {/* Artist scores */}
@@ -1024,39 +1028,43 @@ export default function App() {
                           {album.songs.map((song, idx) => {
                             const uRating = userRatings[song.id] || 0
                             const aRating = compareProfile?.id !== user?.id ? (compareRatings[song.id] || 0) : 0
+                            const isExcluded = song.excluded
                             return (
-                              <div key={song.id} className="px-4 sm:px-6 py-3 hover:bg-zinc-800/30 transition-colors">
+                              <div key={song.id} className={`px-4 sm:px-6 py-3 hover:bg-zinc-800/30 transition-colors ${isExcluded ? 'opacity-40' : ''}`}>
                                 <div className="flex items-start gap-3">
                                   <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0 mt-1">{idx + 1}</span>
                                   <div className="flex-1 min-w-0">
                                     <span className="text-zinc-200 text-sm block truncate">{song.name}</span>
-                                    {/* Mobile: ratings below song name */}
-                                    <div className="flex items-center gap-3 mt-1.5 sm:hidden">
-                                      {aRating > 0 && (
+                                    {isExcluded && <span className="text-xs text-zinc-600 italic">excluded from scores</span>}
+                                    {!isExcluded && (
+                                      <div className="flex items-center gap-3 mt-1.5 sm:hidden">
+                                        {aRating > 0 && (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-xs text-zinc-600">{compareProfile?.username || 'Admin'}:</span>
+                                            <StarRating rating={aRating} readonly size="sm" />
+                                          </div>
+                                        )}
                                         <div className="flex items-center gap-1.5">
-                                          <span className="text-xs text-zinc-600">{compareProfile?.username || 'Admin'}:</span>
+                                          {aRating > 0 && <span className="text-xs text-zinc-600">You:</span>}
+                                          <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {!isExcluded && (
+                                    <div className="hidden sm:flex items-center gap-4 flex-shrink-0">
+                                      {aRating > 0 && (
+                                        <div className="flex flex-col items-end">
+                                          <span className="text-xs text-zinc-600 mb-1">{compareProfile?.username || 'Admin'}</span>
                                           <StarRating rating={aRating} readonly size="sm" />
                                         </div>
                                       )}
-                                      <div className="flex items-center gap-1.5">
-                                        {aRating > 0 && <span className="text-xs text-zinc-600">You:</span>}
+                                      <div className="flex flex-col items-end">
+                                        {aRating > 0 && <span className="text-xs text-zinc-600 mb-1">You</span>}
                                         <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
                                       </div>
                                     </div>
-                                  </div>
-                                  {/* Desktop: ratings inline */}
-                                  <div className="hidden sm:flex items-center gap-4 flex-shrink-0">
-                                    {aRating > 0 && (
-                                      <div className="flex flex-col items-end">
-                                        <span className="text-xs text-zinc-600 mb-1">{compareProfile?.username || 'Admin'}</span>
-                                        <StarRating rating={aRating} readonly size="sm" />
-                                      </div>
-                                    )}
-                                    <div className="flex flex-col items-end">
-                                      {aRating > 0 && <span className="text-xs text-zinc-600 mb-1">You</span>}
-                                      <StarRating rating={uRating} onRate={r => rate(song.id, r)} size="sm" />
-                                    </div>
-                                  </div>
+                                  )}
                                 </div>
                               </div>
                             )
