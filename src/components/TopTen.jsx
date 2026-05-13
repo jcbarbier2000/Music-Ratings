@@ -10,7 +10,7 @@ async function fetchTopTen(userId) {
   try {
     const [albumsRes, songsRes, ratingsRes, artistsRes] = await Promise.all([
       supabase.from('albums').select('id, name, year, artist_id, image_url').limit(10000),
-      supabase.from('songs').select('id, name, album_id').limit(10000),
+      supabase.from('songs').select('id, name, album_id, excluded').limit(10000),
       supabase.from('ratings').select('song_id, rating').eq('user_id', userId).limit(10000),
       supabase.from('artists').select('id, name, image_url').limit(10000),
     ])
@@ -22,9 +22,10 @@ async function fetchTopTen(userId) {
     const artistMap = {}
     ;(artistsRes.data || []).forEach(a => { artistMap[a.id] = a })
 
-    // Build albumId -> songs map
+    // Build albumId -> songs map (skip excluded)
     const albumSongMap = {}
     allSongs.forEach(s => {
+      if (s.excluded) return
       if (!albumSongMap[s.album_id]) albumSongMap[s.album_id] = []
       albumSongMap[s.album_id].push(s)
     })
