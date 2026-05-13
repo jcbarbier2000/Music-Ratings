@@ -85,8 +85,10 @@ export default function ImportModal({ onClose, onImported }) {
         const song = data[row][col]?.trim()
         const ratingRaw = data[row][col + 1]?.trim()
         if (!song) continue
-        const rating = ratingRaw && !isNaN(ratingRaw) ? parseFloat(ratingRaw) : null
-        songs.push({ name: song, rating })
+        // 'x' or 'X' means excluded — import the song but don't rate it
+        const isExcluded = ratingRaw?.toLowerCase() === 'x'
+        const rating = !isExcluded && ratingRaw && !isNaN(ratingRaw) ? parseFloat(ratingRaw) : null
+        songs.push({ name: song, rating, excluded: isExcluded })
       }
 
       albums.push({ name, year: year || null, songs, is_non_album: false })
@@ -98,7 +100,7 @@ export default function ImportModal({ onClose, onImported }) {
       msgs.push(`"${albums[albums.length - 1].name}" marked as non-album (Singles/Features/etc.)`)
     }
 
-    msgs.push(`Found ${albums.length} albums, ${albums.reduce((s, a) => s + a.songs.length, 0)} songs`)
+    msgs.push(`Found ${albums.length} albums, ${albums.reduce((s, a) => s + a.songs.filter(s => !s.excluded).length, 0)} songs (${albums.reduce((s, a) => s + a.songs.filter(s => s.excluded).length, 0)} excluded)`)
     setLog(msgs)
     setPreview({ name: artistName.trim(), genre, subgenre, albums })
     setStatus({ type: 'success', message: `Preview ready: ${albums.length} albums` })
@@ -130,14 +132,14 @@ export default function ImportModal({ onClose, onImported }) {
           const song = album.songs[i]
           const { data: s, error: sErr } = await supabase
             .from('songs')
-            .upsert({ album_id: alb.id, name: song.name, track_order: i },
+            .upsert({ album_id: alb.id, name: song.name, track_order: i, excluded: song.excluded || false },
                      { onConflict: 'album_id,name' })
             .select().single()
           if (sErr) throw sErr
 
-          // Only save rating if this song name hasn't been seen yet across all albums
+          // Skip rating if excluded (x-rated) or already seen
           const nameKey = song.name.toLowerCase().trim()
-          if (song.rating !== null && !seenSongNames.has(nameKey)) {
+          if (song.rating !== null && !song.excluded && !seenSongNames.has(nameKey)) {
             const rounded = Math.round(song.rating)
             await supabase.rpc('upsert_rating', { p_song_id: s.id, p_rating: Math.min(10, Math.max(1, rounded)) })
           }
