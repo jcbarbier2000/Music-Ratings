@@ -462,7 +462,7 @@ export default function App() {
     if (!newSongName.trim() || !editingAlbum) return
     const songs = editingAlbum.songs
     // Determine insert position
-    const insertAt = insertAfterIdx === null ? songs.length : insertAfterIdx + 1
+    const insertAt = insertAfterIdx === null ? songs.length : insertAfterIdx === -1 ? 0 : insertAfterIdx + 1
 
     // Insert song into DB
     const { data: s } = await supabase
@@ -1346,6 +1346,18 @@ export default function App() {
                   Songs <span className="text-zinc-600 normal-case tracking-normal">({editingAlbum.songs.length})</span>
                 </label>
                 <div className="bg-zinc-800/50 rounded-xl border border-zinc-700 divide-y divide-zinc-700/60 max-h-64 overflow-y-auto mb-2">
+                  {/* Insert at beginning */}
+                  <div className="flex items-center gap-2 px-3 py-1.5">
+                    <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0">↑</span>
+                    <span className="text-zinc-600 text-xs flex-1">beginning of album</span>
+                    <button
+                      onClick={() => { setInsertAfterIdx(-1); setNewSongName(''); setTimeout(() => document.getElementById('new-song-input')?.focus(), 50) }}
+                      className={`p-1 transition-colors ${insertAfterIdx === -1 ? 'text-violet-400' : 'text-zinc-600 hover:text-violet-400'}`}
+                      title="Insert at beginning"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   {editingAlbum.songs.map((song, idx) => (
                     <div key={song.id}>
                       <div className="flex items-center gap-2 px-3 py-2">
@@ -1397,7 +1409,7 @@ export default function App() {
                 {/* Insert position indicator */}
                 {insertAfterIdx !== null && (
                   <p className="text-xs text-violet-400 mb-1">
-                    Inserting after track {insertAfterIdx + 1} — <button onClick={() => setInsertAfterIdx(null)} className="underline">insert at end instead</button>
+                    {insertAfterIdx === -1 ? 'Inserting at beginning' : `Inserting after track ${insertAfterIdx + 1}`} — <button onClick={() => setInsertAfterIdx(null)} className="underline">insert at end instead</button>
                   </p>
                 )}
 
@@ -1408,7 +1420,7 @@ export default function App() {
                     value={newSongName}
                     onChange={e => setNewSongName(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addSong()}
-                    placeholder={insertAfterIdx !== null ? `Insert after track ${insertAfterIdx + 1}...` : 'Add to end...'}
+                    placeholder={insertAfterIdx === null ? 'Add to end...' : insertAfterIdx === -1 ? 'Insert at beginning...' : `Insert after track ${insertAfterIdx + 1}...`}
                     className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                   />
                   <button onClick={addSong}
