@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar, Users, Trophy } from 'lucide-react'
+import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar, Users, Trophy, Check } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './hooks/useAuth'
 import Login from './components/Login'
@@ -33,6 +33,9 @@ export default function App() {
   const [editAlbumYear, setEditAlbumYear] = useState('')
   const [editAlbumImageUrl, setEditAlbumImageUrl] = useState('')
   const [newSongName, setNewSongName] = useState('')
+  const [editingSongId, setEditingSongId] = useState(null)
+  const [editingSongName, setEditingSongName] = useState('')
+  const [insertAfterIdx, setInsertAfterIdx] = useState(null) // null = end
   const [editGenre, setEditGenre] = useState('')
   const [editSubgenre, setEditSubgenre] = useState('')
   const [editImageUrl, setEditImageUrl] = useState('')
@@ -457,22 +460,51 @@ export default function App() {
 
   const addSong = async () => {
     if (!newSongName.trim() || !editingAlbum) return
-    const trackOrder = editingAlbum.songs.length
+    const songs = editingAlbum.songs
+    // Determine insert position
+    const insertAt = insertAfterIdx === null ? songs.length : insertAfterIdx + 1
+
+    // Insert song into DB
     const { data: s } = await supabase
       .from('songs')
-      .insert({ album_id: editingAlbum.id, name: newSongName.trim(), track_order: trackOrder })
+      .insert({ album_id: editingAlbum.id, name: newSongName.trim(), track_order: insertAt })
       .select().single()
+
     if (s) {
+      // Re-order songs after insertion
+      const newSongs = [
+        ...songs.slice(0, insertAt),
+        s,
+        ...songs.slice(insertAt),
+      ]
+      // Update track_order for all songs after the insert point
+      await Promise.all(
+        newSongs.map((song, idx) =>
+          supabase.from('songs').update({ track_order: idx }).eq('id', song.id)
+        )
+      )
+      const updatedSongs = newSongs.map((song, idx) => ({ ...song, track_order: idx }))
       setArtistDetail(prev => ({
         ...prev,
-        albums: prev.albums.map(a => a.id === editingAlbum.id
-          ? { ...a, songs: [...a.songs, s] }
-          : a
-        )
+        albums: prev.albums.map(a => a.id === editingAlbum.id ? { ...a, songs: updatedSongs } : a)
       }))
-      setEditingAlbum(prev => ({ ...prev, songs: [...prev.songs, s] }))
+      setEditingAlbum(prev => ({ ...prev, songs: updatedSongs }))
       setNewSongName('')
+      setInsertAfterIdx(null)
     }
+  }
+
+  const renameSong = async (songId) => {
+    if (!editingSongName.trim()) return
+    await supabase.from('songs').update({ name: editingSongName.trim() }).eq('id', songId)
+    const updateSongs = (songs) => songs.map(s => s.id === songId ? { ...s, name: editingSongName.trim() } : s)
+    setArtistDetail(prev => ({
+      ...prev,
+      albums: prev.albums.map(a => a.id === editingAlbum.id ? { ...a, songs: updateSongs(a.songs) } : a)
+    }))
+    setEditingAlbum(prev => ({ ...prev, songs: updateSongs(prev.songs) }))
+    setEditingSongId(null)
+    setEditingSongName('')
   }
 
   const deleteSong = async (songId, songName) => {
@@ -1292,7 +1324,7 @@ export default function App() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
               <h2 className="text-xl font-bold text-white">Edit Album</h2>
-              <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null); setNewSongName('') }}
+              <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null); setNewSongName(''); setEditingSongId(null); setInsertAfterIdx(null) }}
                 className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"><X className="w-5 h-5 text-zinc-400" /></button>
             </div>
             <div className="p-6 space-y-4">
@@ -1313,27 +1345,70 @@ export default function App() {
                 <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">
                   Songs <span className="text-zinc-600 normal-case tracking-normal">({editingAlbum.songs.length})</span>
                 </label>
-                <div className="bg-zinc-800/50 rounded-xl border border-zinc-700 divide-y divide-zinc-700/60 max-h-48 overflow-y-auto mb-2">
+                <div className="bg-zinc-800/50 rounded-xl border border-zinc-700 divide-y divide-zinc-700/60 max-h-64 overflow-y-auto mb-2">
                   {editingAlbum.songs.map((song, idx) => (
-                    <div key={song.id} className="flex items-center gap-3 px-3 py-2">
-                      <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0">{idx + 1}</span>
-                      <span className="text-zinc-300 text-sm flex-1 truncate">{song.name}</span>
-                      <button
-                        onClick={() => deleteSong(song.id, song.name)}
-                        className="p-1 text-zinc-600 hover:text-red-400 transition-colors flex-shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <div key={song.id}>
+                      <div className="flex items-center gap-2 px-3 py-2">
+                        <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0">{idx + 1}</span>
+                        {editingSongId === song.id ? (
+                          <input
+                            value={editingSongName}
+                            onChange={e => setEditingSongName(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') renameSong(song.id); if (e.key === 'Escape') { setEditingSongId(null); setEditingSongName('') } }}
+                            autoFocus
+                            className="flex-1 px-2 py-0.5 bg-zinc-700 border border-violet-500 text-white text-sm rounded-lg focus:outline-none"
+                          />
+                        ) : (
+                          <span className="text-zinc-300 text-sm flex-1 truncate">{song.name}</span>
+                        )}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {editingSongId === song.id ? (
+                            <>
+                              <button onClick={() => renameSong(song.id)} className="p-1 text-green-400 hover:text-green-300 transition-colors" title="Save">
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => { setEditingSongId(null); setEditingSongName('') }} className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors" title="Cancel">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => { setInsertAfterIdx(idx); setNewSongName(''); setTimeout(() => document.getElementById('new-song-input')?.focus(), 50) }}
+                                className={`p-1 transition-colors text-xs ${insertAfterIdx === idx ? 'text-violet-400' : 'text-zinc-600 hover:text-violet-400'}`}
+                                title="Insert after this song"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => { setEditingSongId(song.id); setEditingSongName(song.name) }} className="p-1 text-zinc-600 hover:text-violet-400 transition-colors" title="Rename">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => deleteSong(song.id, song.name)} className="p-1 text-zinc-600 hover:text-red-400 transition-colors" title="Delete">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
+
+                {/* Insert position indicator */}
+                {insertAfterIdx !== null && (
+                  <p className="text-xs text-violet-400 mb-1">
+                    Inserting after track {insertAfterIdx + 1} — <button onClick={() => setInsertAfterIdx(null)} className="underline">insert at end instead</button>
+                  </p>
+                )}
+
                 {/* Add song */}
                 <div className="flex gap-2">
                   <input
+                    id="new-song-input"
                     value={newSongName}
                     onChange={e => setNewSongName(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addSong()}
-                    placeholder="Add a song..."
+                    placeholder={insertAfterIdx !== null ? `Insert after track ${insertAfterIdx + 1}...` : 'Add to end...'}
                     className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                   />
                   <button onClick={addSong}
@@ -1345,7 +1420,7 @@ export default function App() {
 
               <div className="flex gap-3 pt-2">
                 <button onClick={saveAlbumEdit} className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl transition-colors">Save</button>
-                <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null); setNewSongName('') }}
+                <button onClick={() => { setShowEditAlbum(false); setEditingAlbum(null); setNewSongName(''); setEditingSongId(null); setInsertAfterIdx(null) }}
                   className="px-6 py-3 border border-zinc-700 text-zinc-300 rounded-xl hover:bg-zinc-800 transition-colors">Cancel</button>
               </div>
             </div>
