@@ -385,13 +385,19 @@ export default function App() {
 
     const songIds = sorted.flatMap(a => a.songs.map(s => s.id))
     if (songIds.length && user) {
-      const { data: ur } = await supabase
-        .from('ratings').select('song_id, rating')
-        .eq('user_id', user.id).in('song_id', songIds)
+      // Batch in chunks of 200 to avoid URL length limits
+      const batchSize = 200
+      const allRatings = []
+      for (let i = 0; i < songIds.length; i += batchSize) {
+        const batch = songIds.slice(i, i + batchSize)
+        const { data: ur } = await supabase
+          .from('ratings').select('song_id, rating')
+          .eq('user_id', user.id).in('song_id', batch)
+        if (ur) allRatings.push(...ur)
+      }
       const map = {}
-      const nameMap = {} // songName -> rating (for duplicate song display)
-      ;(ur || []).forEach(r => { map[r.song_id] = r.rating })
-      // Build name lookup from all songs in this artist's albums
+      const nameMap = {}
+      allRatings.forEach(r => { map[r.song_id] = r.rating })
       sorted.flatMap(a => a.songs).forEach(s => {
         if (map[s.id]) nameMap[s.name.toLowerCase().trim()] = map[s.id]
       })
@@ -410,12 +416,18 @@ export default function App() {
       setCompareRatings({})
       return
     }
-    const { data: cr } = await supabase
-      .from('ratings').select('song_id, rating')
-      .eq('user_id', compareProfile.id).in('song_id', songIds)
+    // Batch in chunks of 200 to avoid URL length limits
+    const batchSize = 200
+    const allRatings = []
+    for (let i = 0; i < songIds.length; i += batchSize) {
+      const batch = songIds.slice(i, i + batchSize)
+      const { data: cr } = await supabase
+        .from('ratings').select('song_id, rating')
+        .eq('user_id', compareProfile.id).in('song_id', batch)
+      if (cr) allRatings.push(...cr)
+    }
     const cmap = {}
-    ;(cr || []).forEach(r => { cmap[r.song_id] = r.rating })
-    // Build name lookup for duplicate songs
+    allRatings.forEach(r => { cmap[r.song_id] = r.rating })
     if (artistDetail) {
       artistDetail.albums.flatMap(a => a.songs).forEach(s => {
         if (cmap[s.id]) cmap.__nameMap = { ...(cmap.__nameMap || {}), [s.name.toLowerCase().trim()]: cmap[s.id] }
