@@ -143,10 +143,10 @@ export default function App() {
       const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
 
       const [albumsRes, songsRes, artistsRes, adminRatingsRes] = await Promise.all([
-        supabase.from('albums').select('id, name, artist_id').limit(50000),
-        supabase.from('songs').select('id, name, album_id, excluded').limit(50000),
-        supabase.from('artists').select('id').limit(50000),
-        supabase.from('ratings').select('song_id').eq('user_id', adminProfile.id).limit(50000),
+        supabase.from('albums').select('id, name, artist_id').limit(1000000),
+        supabase.from('songs').select('id, name, album_id, excluded').limit(1000000),
+        supabase.from('artists').select('id').limit(1000000),
+        supabase.from('ratings').select('song_id').eq('user_id', adminProfile.id).limit(1000000),
       ])
 
       const allAlbums = albumsRes.data || []
@@ -219,7 +219,7 @@ export default function App() {
 
       let userStats = null
       if (user.id !== adminProfile.id) {
-        const { data: userRatingsData } = await supabase.from('ratings').select('song_id').eq('user_id', user.id).limit(50000)
+        const { data: userRatingsData } = await supabase.from('ratings').select('song_id').eq('user_id', user.id).limit(1000000)
         const userRatedIds = new Set((userRatingsData || []).map(r => r.song_id))
         const userSongMap = buildSongMap(userRatedIds)
         userStats = calcCompletions(userSongMap, userRatedIds)
@@ -263,9 +263,9 @@ export default function App() {
       const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
 
       // Fetch albums, songs, and ratings separately
-      const { data: allAlbums } = await supabase.from('albums').select('id, name, artist_id').limit(50000)
-      const { data: allSongs } = await supabase.from('songs').select('id, name, album_id, excluded').limit(50000)
-      const { data: myRatingsData } = await supabase.from('ratings').select('song_id, rating').eq('user_id', myUserId).limit(50000)
+      const { data: allAlbums } = await supabase.from('albums').select('id, name, artist_id').limit(1000000)
+      const { data: allSongs } = await supabase.from('songs').select('id, name, album_id, excluded').limit(1000000)
+      const { data: myRatingsData } = await supabase.from('ratings').select('song_id, rating').eq('user_id', myUserId).limit(1000000)
 
       const myRatingMap = {}
       ;(myRatingsData || []).forEach(r => { myRatingMap[r.song_id] = r.rating })
@@ -277,7 +277,7 @@ export default function App() {
       // Compare ratings
       let compareRatingMap = null
       if (compareUserId && compareUserId !== myUserId) {
-        const { data: cData } = await supabase.from('ratings').select('song_id, rating').eq('user_id', compareUserId).limit(50000)
+        const { data: cData } = await supabase.from('ratings').select('song_id, rating').eq('user_id', compareUserId).limit(1000000)
         compareRatingMap = {}
         ;(cData || []).forEach(r => { compareRatingMap[r.song_id] = r.rating })
       }
