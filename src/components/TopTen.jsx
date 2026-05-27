@@ -9,10 +9,10 @@ async function fetchTopTen(userId) {
   if (!userId) return []
   try {
     const [albumsRes, songsRes, ratingsRes, artistsRes] = await Promise.all([
-      supabase.from('albums').select('id, name, year, artist_id, image_url').limit(10000),
-      supabase.from('songs').select('id, name, album_id, excluded').limit(10000),
-      supabase.from('ratings').select('song_id, rating').eq('user_id', userId).limit(10000),
-      supabase.from('artists').select('id, name, image_url').limit(10000),
+      supabase.from('albums').select('id, name, year, artist_id, image_url').limit(1000000),
+      supabase.from('songs').select('id, name, album_id, excluded').limit(1000000),
+      supabase.from('ratings').select('song_id, rating').eq('user_id', userId).limit(1000000),
+      supabase.from('artists').select('id, name, image_url').limit(1000000),
     ])
 
     const allAlbums = (albumsRes.data || []).filter(a => !isNonAlbum(a.name))
