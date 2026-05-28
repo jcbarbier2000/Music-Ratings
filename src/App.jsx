@@ -532,6 +532,17 @@ export default function App() {
     setEditingAlbum(prev => ({ ...prev, songs: prev.songs.filter(s => s.id !== songId) }))
   }
 
+  const toggleSongInterlude = async (songId, currentExcluded) => {
+    const newExcluded = !currentExcluded
+    await supabase.from('songs').update({ excluded: newExcluded }).eq('id', songId)
+    const updateSongs = (songs) => songs.map(s => s.id === songId ? { ...s, excluded: newExcluded } : s)
+    setArtistDetail(prev => ({
+      ...prev,
+      albums: prev.albums.map(a => a.id === editingAlbum.id ? { ...a, songs: updateSongs(a.songs) } : a)
+    }))
+    setEditingAlbum(prev => ({ ...prev, songs: updateSongs(prev.songs) }))
+  }
+
   const albumAvg = (songs, ratingMap) => {
     const vals = songs.filter(s => !s.excluded).map(s => {
       const nameKey = s.name.toLowerCase().trim()
@@ -1147,7 +1158,7 @@ export default function App() {
                                   <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0 mt-1">{idx + 1}</span>
                                   <div className="flex-1 min-w-0">
                                     <span className="text-zinc-200 text-sm block truncate">{song.name}</span>
-                                    {isExcluded && <span className="text-xs text-zinc-600 italic">excluded from scores</span>}
+                                    {isExcluded && <span className="text-xs text-zinc-500 italic">Interlude</span>}
                                     {!isExcluded && (
                                       <div className="flex items-center gap-3 mt-1.5 sm:hidden">
                                         {aRating > 0 && (
@@ -1383,7 +1394,10 @@ export default function App() {
                             className="flex-1 px-2 py-0.5 bg-zinc-700 border border-violet-500 text-white text-sm rounded-lg focus:outline-none"
                           />
                         ) : (
-                          <span className="text-zinc-300 text-sm flex-1 truncate">{song.name}</span>
+                          <span className="text-zinc-300 text-sm flex-1 truncate">
+                            {song.name}
+                            {song.excluded && <span className="text-xs text-amber-500/70 ml-1.5 italic">interlude</span>}
+                          </span>
                         )}
                         <div className="flex items-center gap-1 flex-shrink-0">
                           {editingSongId === song.id ? (
@@ -1403,6 +1417,13 @@ export default function App() {
                                 title="Insert after this song"
                               >
                                 <Plus className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => toggleSongInterlude(song.id, song.excluded)}
+                                className={`p-1 transition-colors ${song.excluded ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-amber-400'}`}
+                                title={song.excluded ? 'Unmark as interlude' : 'Mark as interlude'}
+                              >
+                                <Music className="w-3.5 h-3.5" />
                               </button>
                               <button onClick={() => { setEditingSongId(song.id); setEditingSongName(song.name) }} className="p-1 text-zinc-600 hover:text-violet-400 transition-colors" title="Rename">
                                 <Pencil className="w-3.5 h-3.5" />
