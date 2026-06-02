@@ -229,12 +229,21 @@ export default function MonthlyPicks({ isAdmin, artists, onNavigateToArtist }) {
       if (!pick.artist_id) continue
 
       if (pick.type === 'single') {
-        // Use !inner to filter songs that actually belong to this artist
+        // Step 1: get album IDs for this artist
+        const { data: artistAlbums } = await supabase
+          .from('albums')
+          .select('id')
+          .eq('artist_id', pick.artist_id)
+
+        const albumIds = (artistAlbums || []).map(a => a.id)
+        if (!albumIds.length) continue
+
+        // Step 2: find songs with this name in those albums
         const { data: songs } = await supabase
           .from('songs')
-          .select('id, albums!inner(artist_id)')
+          .select('id')
           .eq('name', pick.title)
-          .eq('albums.artist_id', pick.artist_id)
+          .in('album_id', albumIds)
 
         const songIds = (songs || []).map(s => s.id)
         if (songIds.length) {
