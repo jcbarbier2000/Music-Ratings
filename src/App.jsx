@@ -56,6 +56,7 @@ export default function App() {
   const [settingsInReview, setSettingsInReview] = useState('')
   const [settingsOnDeck, setSettingsOnDeck] = useState('')
   const [artistScores, setArtistScores] = useState({}) // artistId -> { myScore, compareScore }
+  const [newPickTitles, setNewPickTitles] = useState({ songs: new Set(), albums: new Set() })
 
   // Scroll to top button visibility
   useEffect(() => {
@@ -445,6 +446,18 @@ export default function App() {
   useEffect(() => {
     if (selectedArtist && adminProfile !== undefined) loadArtistDetail(selectedArtist)
   }, [selectedArtist, loadArtistDetail])
+
+  useEffect(() => {
+    if (!selectedArtist) { setNewPickTitles({ songs: new Set(), albums: new Set() }); return }
+    const d = new Date()
+    const month = `${['January','February','March','April','May','June','July','August','September','October','November','December'][d.getMonth()]} ${d.getFullYear()}`
+    supabase.from('monthly_picks').select('type, title').eq('artist_id', selectedArtist.id).eq('month', month)
+      .then(({ data }) => {
+        const songs = new Set((data || []).filter(p => p.type === 'single').map(p => p.title.toLowerCase().trim()))
+        const albums = new Set((data || []).filter(p => p.type === 'album').map(p => p.title.toLowerCase().trim()))
+        setNewPickTitles({ songs, albums })
+      })
+  }, [selectedArtist])
 
   const rate = async (songId, rating) => {
     // Find all songs with the same name across all albums for this artist
@@ -1107,6 +1120,9 @@ export default function App() {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="font-bold text-white text-sm sm:text-base">{album.name}</h3>
+                              {newPickTitles.albums.has(album.name.toLowerCase().trim()) && (
+                                <span className="text-xs font-bold px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">New</span>
+                              )}
                               {uAvg && (
                                 <span className="px-2 py-0.5 text-xs font-bold rounded-full"
                                   style={{ backgroundColor: scoreColor(parseFloat(uAvg)) + '33', color: scoreColor(parseFloat(uAvg)), border: `1px solid ${scoreColor(parseFloat(uAvg))}55` }}>
@@ -1157,7 +1173,12 @@ export default function App() {
                                 <div className="flex items-start gap-3">
                                   <span className="text-zinc-600 font-mono text-xs w-5 text-right flex-shrink-0 mt-1">{idx + 1}</span>
                                   <div className="flex-1 min-w-0">
-                                    <span className="text-zinc-200 text-sm block truncate">{song.name}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-zinc-200 text-sm truncate">{song.name}</span>
+                                      {!isExcluded && newPickTitles.songs.has(song.name.toLowerCase().trim()) && (
+                                        <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">New</span>
+                                      )}
+                                    </div>
                                     {isExcluded && <span className="text-xs text-zinc-500 italic">Interlude</span>}
                                     {!isExcluded && (
                                       <div className="flex items-center gap-3 mt-1.5 sm:hidden">
