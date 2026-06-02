@@ -86,6 +86,28 @@ function PickTable({ title, items, type, isAdmin, artists, scores, onAdd, onDele
 
 function AddModal({ type, artists, availableMonths, formMonth, formArtistId, formArtistName, formTitle, saving,
   onMonthChange, onArtistIdChange, onArtistNameChange, onTitleChange, onSubmit, onClose }) {
+  const [artistOptions, setArtistOptions] = useState([]) // song or album names for selected artist
+
+  useEffect(() => {
+    if (!formArtistId) { setArtistOptions([]); return }
+    supabase
+      .from('albums')
+      .select('name, songs(name, excluded)')
+      .eq('artist_id', formArtistId)
+      .order('year', { ascending: false })
+      .then(({ data }) => {
+        const albums = data || []
+        if (type === 'single') {
+          const names = [...new Set(
+            albums.flatMap(a => (a.songs || []).filter(s => !s.excluded).map(s => s.name))
+          )].sort((a, b) => a.localeCompare(b))
+          setArtistOptions(names)
+        } else {
+          setArtistOptions(albums.map(a => a.name))
+        }
+      })
+  }, [formArtistId, type])
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full">
@@ -129,9 +151,19 @@ function AddModal({ type, artists, availableMonths, formMonth, formArtistId, for
             <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">
               {type === 'single' ? 'Song Title' : 'Album Title'}
             </label>
-            <input value={formTitle} onChange={e => onTitleChange(e.target.value)}
-              placeholder={type === 'single' ? 'e.g. Merry Go' : 'e.g. Your Favorite Toy'}
-              className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            {formArtistId && artistOptions.length > 0 ? (
+              <select value={formTitle} onChange={e => onTitleChange(e.target.value)}
+                className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500">
+                <option value="">— Select {type === 'single' ? 'a song' : 'an album'} —</option>
+                {artistOptions.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            ) : (
+              <input value={formTitle} onChange={e => onTitleChange(e.target.value)}
+                placeholder={type === 'single' ? 'e.g. Merry Go' : 'e.g. Your Favorite Toy'}
+                className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
+            )}
           </div>
           <div className="flex gap-3 pt-2">
             <button onClick={onSubmit} disabled={saving}
