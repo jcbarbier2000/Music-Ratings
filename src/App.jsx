@@ -1213,6 +1213,7 @@ export default function App() {
         {page === 'monthly' && (
           <MonthlyPicks
             isAdmin={isAdmin}
+            user={user}
             artists={artists}
             onNavigateToArtist={(artist) => {
               setSelectedArtist(artist)

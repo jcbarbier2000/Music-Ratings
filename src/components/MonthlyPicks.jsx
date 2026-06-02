@@ -181,7 +181,7 @@ function AddModal({ type, artists, availableMonths, formMonth, formArtistId, for
   )
 }
 
-export default function MonthlyPicks({ isAdmin, artists, onNavigateToArtist }) {
+export default function MonthlyPicks({ isAdmin, user, artists, onNavigateToArtist }) {
   const [picks, setPicks] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedMonth, setSelectedMonth] = useState(currentMonthLabel())
@@ -249,11 +249,29 @@ export default function MonthlyPicks({ isAdmin, artists, onNavigateToArtist }) {
         if (songIds.length) {
           const { data: ratings } = await supabase
             .from('ratings')
-            .select('user_id, rating, profiles(username, is_admin)')
+            .select('user_id, rating')
             .in('song_id', songIds)
 
-          const adminRating = ratings?.find(r => r.profiles?.is_admin)?.rating || null
-          scoreMap[pick.id] = { adminScore: adminRating, allRatings: ratings || [] }
+          if (ratings?.length) {
+            const userIds = [...new Set(ratings.map(r => r.user_id))]
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id, username, is_admin')
+              .in('id', userIds)
+
+            const ratingByUser = {}
+            ratings.forEach(r => { ratingByUser[r.user_id] = r.rating })
+
+            const adminProfile = (profiles || []).find(p => p.is_admin)
+            const adminScore = adminProfile ? (ratingByUser[adminProfile.id] ?? null) : null
+            const userScore = user ? (ratingByUser[user.id] ?? null) : null
+            const anyScore = ratings[0]?.rating ?? null
+
+            scoreMap[pick.id] = {
+              adminScore: adminScore ?? userScore ?? anyScore,
+              allRatings: (profiles || []).map(p => ({ username: p.username, isAdmin: p.is_admin, rating: ratingByUser[p.id] }))
+            }
+          }
         }
       } else {
         const { data: albums } = await supabase
