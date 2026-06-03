@@ -870,7 +870,7 @@ export default function App() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="font-semibold text-white group-hover:text-violet-300 transition-colors truncate">{artist.name}</div>
                           {newMusicArtistIds.has(artist.id) && (
-                            <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">New</span>
+                            <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">New Music</span>
                           )}
                         </div>
                         {artist.genre && (
