@@ -57,6 +57,7 @@ export default function App() {
   const [settingsOnDeck, setSettingsOnDeck] = useState('')
   const [artistScores, setArtistScores] = useState({}) // artistId -> { myScore, compareScore }
   const [newPickTitles, setNewPickTitles] = useState({ songs: new Set(), albums: new Set() })
+  const [newMusicArtistIds, setNewMusicArtistIds] = useState(new Set())
 
   // Scroll to top button visibility
   useEffect(() => {
@@ -365,6 +366,14 @@ export default function App() {
   }, [])
 
   useEffect(() => { if (user) loadArtists() }, [user, loadArtists])
+
+  useEffect(() => {
+    if (!user) return
+    const d = new Date()
+    const month = `${['January','February','March','April','May','June','July','August','September','October','November','December'][d.getMonth()]} ${d.getFullYear()}`
+    supabase.from('monthly_picks').select('artist_id').eq('month', month).not('artist_id', 'is', null)
+      .then(({ data }) => setNewMusicArtistIds(new Set((data || []).map(p => p.artist_id))))
+  }, [user])
 
   const loadArtistDetail = useCallback(async (artist) => {
     setDataLoading(true)
@@ -858,7 +867,12 @@ export default function App() {
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-white group-hover:text-violet-300 transition-colors truncate">{artist.name}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="font-semibold text-white group-hover:text-violet-300 transition-colors truncate">{artist.name}</div>
+                          {newMusicArtistIds.has(artist.id) && (
+                            <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">New</span>
+                          )}
+                        </div>
                         {artist.genre && (
                           <div className="text-xs text-zinc-500 truncate mt-0.5">
                             {artist.genre}{artist.subgenre ? ` · ${artist.subgenre}` : ''}
