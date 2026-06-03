@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Plus, Trash2, X, Music, Disc, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -12,20 +12,24 @@ const currentMonthLabel = () => {
   return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`
 }
 
-function ScoreDisplay({ scores, pickId }) {
+function ScoreDisplay({ scores, pickId, compareProfile }) {
   const s = scores[pickId]
   if (!s) return <span className="text-zinc-600 text-sm">—</span>
   return (
-    <div className="text-right">
-      {s.adminScore !== null
-        ? <span className="text-violet-400 font-bold text-sm">{typeof s.adminScore === 'number' ? s.adminScore.toFixed(2) : s.adminScore}</span>
-        : <span className="text-zinc-600 text-sm">—</span>
-      }
+    <div className="flex flex-col items-end gap-0.5">
+      <span className={`font-bold text-sm ${s.userScore !== null ? 'text-violet-400' : 'text-zinc-600'}`}>
+        {s.userScore !== null ? (typeof s.userScore === 'number' ? s.userScore.toFixed(2) : s.userScore) : '—'}
+      </span>
+      {compareProfile && (
+        <span className={`text-xs ${s.compareScore !== null ? 'text-zinc-400' : 'text-zinc-600'}`}>
+          {s.compareScore !== null ? (typeof s.compareScore === 'number' ? s.compareScore.toFixed(2) : s.compareScore) : '—'}
+        </span>
+      )}
     </div>
   )
 }
 
-function PickTable({ title, items, type, isAdmin, artists, scores, onAdd, onDelete, onNavigateToArtist }) {
+function PickTable({ title, items, type, isAdmin, artists, scores, compareProfile, onAdd, onDelete, onNavigateToArtist }) {
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
       <div className="bg-zinc-800/50 px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
@@ -68,7 +72,7 @@ function PickTable({ title, items, type, isAdmin, artists, scores, onAdd, onDele
               </button>
               <span className="text-sm text-zinc-300 truncate">{pick.title}</span>
               <div className="flex items-center justify-end gap-2">
-                <ScoreDisplay scores={scores} pickId={pick.id} />
+                <ScoreDisplay scores={scores} pickId={pick.id} compareProfile={compareProfile} />
                 {isAdmin && (
                   <button onClick={() => onDelete(pick.id)}
                     className="p-1 text-zinc-700 hover:text-red-400 transition-colors">
@@ -86,7 +90,7 @@ function PickTable({ title, items, type, isAdmin, artists, scores, onAdd, onDele
 
 function AddModal({ type, artists, availableMonths, formMonth, formArtistId, formArtistName, formTitle, saving,
   onMonthChange, onArtistIdChange, onArtistNameChange, onTitleChange, onSubmit, onClose }) {
-  const [artistOptions, setArtistOptions] = useState([]) // song or album names for selected artist
+  const [artistOptions, setArtistOptions] = useState([])
 
   useEffect(() => {
     if (!formArtistId) { setArtistOptions([]); return }
@@ -189,6 +193,8 @@ export default function MonthlyPicks({ isAdmin, user, artists, onNavigateToArtis
   const [showAddSingle, setShowAddSingle] = useState(false)
   const [showAddAlbum, setShowAddAlbum] = useState(false)
   const [scores, setScores] = useState({})
+  const [allProfiles, setAllProfiles] = useState([])
+  const [compareProfile, setCompareProfile] = useState(null)
 
   const [formArtistId, setFormArtistId] = useState('')
   const [formArtistName, setFormArtistName] = useState('')
@@ -196,13 +202,24 @@ export default function MonthlyPicks({ isAdmin, user, artists, onNavigateToArtis
   const [formMonth, setFormMonth] = useState(currentMonthLabel())
   const [saving, setSaving] = useState(false)
 
+  // Keep compareProfile ref so loadScores always has the latest value
+  const compareProfileRef = useRef(compareProfile)
+  useEffect(() => { compareProfileRef.current = compareProfile }, [compareProfile])
+
   useEffect(() => {
     loadMonths()
+    supabase.from('profiles').select('*').order('username')
+      .then(({ data }) => setAllProfiles(data || []))
   }, [])
 
   useEffect(() => {
     if (selectedMonth) loadPicks()
   }, [selectedMonth])
+
+  // Reload scores when compare profile changes (picks are already loaded)
+  useEffect(() => {
+    if (picks.length) loadScores(picks, compareProfile)
+  }, [compareProfile])
 
   const loadMonths = async () => {
     const { data } = await supabase
@@ -211,6 +228,60 @@ export default function MonthlyPicks({ isAdmin, user, artists, onNavigateToArtis
       .order('created_at', { ascending: false })
     const unique = [...new Set([currentMonthLabel(), ...(data || []).map(r => r.month)])]
     setAvailableMonths(unique)
+  }
+
+  const getSongIds = async (pick) => {
+    if (pick.type === 'single') {
+      const { data: artistAlbums } = await supabase
+        .from('albums').select('id').eq('artist_id', pick.artist_id)
+      const albumIds = (artistAlbums || []).map(a => a.id)
+      if (!albumIds.length) return []
+      const { data: songs } = await supabase
+        .from('songs').select('id').eq('name', pick.title).in('album_id', albumIds)
+      return (songs || []).map(s => s.id)
+    } else {
+      const { data: albums } = await supabase
+        .from('albums').select('id, songs(id)').eq('artist_id', pick.artist_id).eq('name', pick.title)
+      return (albums?.[0]?.songs || []).map(s => s.id)
+    }
+  }
+
+  const loadScores = async (pickList, cmpProfile) => {
+    const scoreMap = {}
+    for (const pick of pickList) {
+      if (!pick.artist_id) continue
+
+      const songIds = await getSongIds(pick)
+      if (!songIds.length) continue
+
+      const { data: ratings } = await supabase
+        .from('ratings').select('user_id, rating').in('song_id', songIds)
+      if (!ratings?.length) continue
+
+      // For albums, average per user; for singles, take direct rating
+      const avgByUser = {}
+      if (pick.type === 'album') {
+        const totals = {}
+        ratings.forEach(r => {
+          if (!totals[r.user_id]) totals[r.user_id] = { sum: 0, count: 0 }
+          totals[r.user_id].sum += r.rating
+          totals[r.user_id].count++
+        })
+        Object.entries(totals).forEach(([uid, { sum, count }]) => {
+          avgByUser[uid] = sum / count
+        })
+      } else {
+        ratings.forEach(r => { avgByUser[r.user_id] = r.rating })
+      }
+
+      const userScore = user ? (avgByUser[user.id] ?? null) : null
+      const compareScore = cmpProfile ? (avgByUser[cmpProfile.id] ?? null) : null
+
+      // Fall back to any score if user hasn't rated
+      const anyScore = Object.values(avgByUser)[0] ?? null
+      scoreMap[pick.id] = { userScore: userScore ?? anyScore, compareScore }
+    }
+    setScores(scoreMap)
   }
 
   const loadPicks = async () => {
@@ -223,95 +294,7 @@ export default function MonthlyPicks({ isAdmin, user, artists, onNavigateToArtis
 
     const pickList = pickData || []
     setPicks(pickList)
-
-    const scoreMap = {}
-    for (const pick of pickList) {
-      if (!pick.artist_id) continue
-
-      if (pick.type === 'single') {
-        // Step 1: get album IDs for this artist
-        const { data: artistAlbums } = await supabase
-          .from('albums')
-          .select('id')
-          .eq('artist_id', pick.artist_id)
-
-        const albumIds = (artistAlbums || []).map(a => a.id)
-        if (!albumIds.length) continue
-
-        // Step 2: find songs with this name in those albums
-        const { data: songs } = await supabase
-          .from('songs')
-          .select('id')
-          .eq('name', pick.title)
-          .in('album_id', albumIds)
-
-        const songIds = (songs || []).map(s => s.id)
-        if (songIds.length) {
-          const { data: ratings } = await supabase
-            .from('ratings')
-            .select('user_id, rating')
-            .in('song_id', songIds)
-
-          if (ratings?.length) {
-            const userIds = [...new Set(ratings.map(r => r.user_id))]
-            const { data: profiles } = await supabase
-              .from('profiles')
-              .select('id, username, is_admin')
-              .in('id', userIds)
-
-            const ratingByUser = {}
-            ratings.forEach(r => { ratingByUser[r.user_id] = r.rating })
-
-            const adminProfile = (profiles || []).find(p => p.is_admin)
-            const adminScore = adminProfile ? (ratingByUser[adminProfile.id] ?? null) : null
-            const userScore = user ? (ratingByUser[user.id] ?? null) : null
-            const anyScore = ratings[0]?.rating ?? null
-
-            scoreMap[pick.id] = {
-              adminScore: adminScore ?? userScore ?? anyScore,
-              allRatings: (profiles || []).map(p => ({ username: p.username, isAdmin: p.is_admin, rating: ratingByUser[p.id] }))
-            }
-          }
-        }
-      } else {
-        const { data: albums } = await supabase
-          .from('albums')
-          .select('id, songs(id)')
-          .eq('artist_id', pick.artist_id)
-          .eq('name', pick.title)
-
-        const album = albums?.[0]
-        if (album?.songs?.length) {
-          const songIds = album.songs.map(s => s.id)
-          const { data: ratings } = await supabase
-            .from('ratings')
-            .select('user_id, rating, profiles(username, is_admin)')
-            .in('song_id', songIds)
-
-          const byUser = {}
-          ;(ratings || []).forEach(r => {
-            const username = r.profiles?.username || r.user_id
-            const isAdm = r.profiles?.is_admin
-            if (!byUser[username]) byUser[username] = { ratings: [], isAdmin: isAdm }
-            byUser[username].ratings.push(r.rating)
-          })
-
-          const userAverages = Object.entries(byUser).map(([username, { ratings, isAdmin }]) => ({
-            username,
-            isAdmin,
-            avg: (ratings.reduce((s, v) => s + v, 0) / ratings.length).toFixed(2)
-          }))
-
-          const adminEntry = userAverages.find(u => u.isAdmin)
-          scoreMap[pick.id] = {
-            adminScore: adminEntry ? parseFloat(adminEntry.avg) : null,
-            allRatings: userAverages
-          }
-        }
-      }
-    }
-
-    setScores(scoreMap)
+    await loadScores(pickList, compareProfileRef.current)
     setLoading(false)
   }
 
@@ -325,11 +308,7 @@ export default function MonthlyPicks({ isAdmin, user, artists, onNavigateToArtis
       : formArtistName.trim()
 
     await supabase.from('monthly_picks').insert({
-      month: formMonth,
-      type,
-      artist_id: artistId,
-      artist_name: artistName,
-      title: formTitle.trim(),
+      month: formMonth, type, artist_id: artistId, artist_name: artistName, title: formTitle.trim(),
     })
 
     setFormArtistId('')
@@ -352,6 +331,8 @@ export default function MonthlyPicks({ isAdmin, user, artists, onNavigateToArtis
   const singles = picks.filter(p => p.type === 'single')
   const albums = picks.filter(p => p.type === 'album')
 
+  const otherProfiles = allProfiles.filter(p => p.id !== user?.id)
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -373,6 +354,29 @@ export default function MonthlyPicks({ isAdmin, user, artists, onNavigateToArtis
         </div>
       </div>
 
+      {/* Compare selector */}
+      {otherProfiles.length > 0 && (
+        <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+          <span className="text-xs text-zinc-500 uppercase tracking-widest flex-shrink-0">Compare with</span>
+          <select
+            value={compareProfile?.id || ''}
+            onChange={e => setCompareProfile(allProfiles.find(p => p.id === e.target.value) || null)}
+            className="flex-1 bg-zinc-800 border border-zinc-700 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500"
+          >
+            <option value="">Nobody</option>
+            {otherProfiles.map(p => (
+              <option key={p.id} value={p.id}>{p.username}{p.is_admin ? ' (Admin)' : ''}</option>
+            ))}
+          </select>
+          {compareProfile && (
+            <div className="flex flex-col items-end text-xs gap-0.5 flex-shrink-0">
+              <span className="text-violet-400 font-medium">You</span>
+              <span className="text-zinc-500">{compareProfile.username}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-16 text-zinc-600">Loading...</div>
       ) : (
@@ -384,6 +388,7 @@ export default function MonthlyPicks({ isAdmin, user, artists, onNavigateToArtis
             isAdmin={isAdmin}
             artists={artists}
             scores={scores}
+            compareProfile={compareProfile}
             onAdd={() => setShowAddSingle(true)}
             onDelete={deletePick}
             onNavigateToArtist={onNavigateToArtist}
@@ -395,6 +400,7 @@ export default function MonthlyPicks({ isAdmin, user, artists, onNavigateToArtis
             isAdmin={isAdmin}
             artists={artists}
             scores={scores}
+            compareProfile={compareProfile}
             onAdd={() => setShowAddAlbum(true)}
             onDelete={deletePick}
             onNavigateToArtist={onNavigateToArtist}
