@@ -141,12 +141,9 @@ export default function App() {
     if (!user || !adminProfile) return
 
     try {
-      const NON = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
-      const isNonAlbum = (name) => NON.some(label => name.toLowerCase().trim().includes(label))
-
       const [albumsRes, songsRes, artistsRes, adminRatingsRes] = await Promise.all([
-        supabase.from('albums').select('id, name, artist_id').limit(1000000),
-        supabase.from('songs').select('id, name, album_id, excluded').limit(1000000),
+        supabase.from('albums').select('id, artist_id').limit(1000000),
+        supabase.from('songs').select('id, album_id, excluded').limit(1000000),
         supabase.from('artists').select('id').limit(1000000),
         supabase.from('ratings').select('song_id').eq('user_id', adminProfile.id).limit(1000000),
       ])
@@ -154,77 +151,52 @@ export default function App() {
       const allAlbums = albumsRes.data || []
       const allSongs = songsRes.data || []
       const totalArtists = (artistsRes.data || []).length
+      const totalAlbums = allAlbums.length
       const adminRatedIds = new Set((adminRatingsRes.data || []).map(r => r.song_id))
 
-      const filteredAlbumIds = new Set(
-        allAlbums.filter(a => !isNonAlbum(a.name)).map(a => a.id)
-      )
-      const filteredAlbums = allAlbums.filter(a => filteredAlbumIds.has(a.id))
-      const totalAlbums = filteredAlbums.length
-
       const albumToArtist = {}
-      filteredAlbums.forEach(a => { albumToArtist[a.id] = a.artist_id })
+      allAlbums.forEach(a => { albumToArtist[a.id] = a.artist_id })
 
-      // For each artist, deduplicate songs by name, preferring the rated song ID
-      // artistId -> songNameKey -> songId
-      const buildSongMap = (ratedIds) => {
-        const map = {}
-        allSongs.forEach(s => {
-          if (s.excluded) return
-          const artistId = albumToArtist[s.album_id]
-          if (!artistId) return
-          if (!map[artistId]) map[artistId] = {}
-          const key = s.name.toLowerCase().trim()
-          const existing = map[artistId][key]
-          if (!existing || (!ratedIds.has(existing) && ratedIds.has(s.id))) {
-            map[artistId][key] = s.id
-          }
-        })
-        return map
-      }
+      // Rateable songs: all songs except interludes
+      const rateableSongs = allSongs.filter(s => !s.excluded)
+      const totalSongs = rateableSongs.length
 
-      const adminSongMap = buildSongMap(adminRatedIds)
-      const uniqueAdminSongIds = Object.values(adminSongMap).flatMap(m => Object.values(m))
-      const totalSongs = new Set(uniqueAdminSongIds).size
+      const calcCompletions = (ratedIds) => {
+        const ratedSongs = rateableSongs.filter(s => ratedIds.has(s.id)).length
 
-      const calcCompletions = (songMap, ratedIds) => {
-        const uniqueSongIds = [...new Set(Object.values(songMap).flatMap(m => Object.values(m)))]
-        const ratedSongs = uniqueSongIds.filter(id => ratedIds.has(id)).length
-
-        // Build album -> canonical song IDs
         const albumSongs = {}
-        allSongs.forEach(s => {
-          if (s.excluded) return
-          const artistId = albumToArtist[s.album_id]
-          if (!artistId) return
-          const key = s.name.toLowerCase().trim()
-          if (songMap[artistId]?.[key] === s.id) {
-            if (!albumSongs[s.album_id]) albumSongs[s.album_id] = []
-            albumSongs[s.album_id].push(s.id)
-          }
+        rateableSongs.forEach(s => {
+          if (!albumSongs[s.album_id]) albumSongs[s.album_id] = []
+          albumSongs[s.album_id].push(s.id)
         })
 
-        const completedAlbums = filteredAlbums.filter(a => {
+        const completedAlbums = allAlbums.filter(a => {
           const ids = albumSongs[a.id] || []
           return ids.length > 0 && ids.every(id => ratedIds.has(id))
         }).length
 
-        const completedArtists = Object.values(songMap).filter(nameMap => {
-          const ids = Object.values(nameMap)
-          return ids.length > 0 && ids.every(id => ratedIds.has(id))
-        }).length
+        const artistSongs = {}
+        rateableSongs.forEach(s => {
+          const artistId = albumToArtist[s.album_id]
+          if (!artistId) return
+          if (!artistSongs[artistId]) artistSongs[artistId] = []
+          artistSongs[artistId].push(s.id)
+        })
+
+        const completedArtists = Object.values(artistSongs).filter(ids =>
+          ids.length > 0 && ids.every(id => ratedIds.has(id))
+        ).length
 
         return { ratedSongs, completedAlbums, completedArtists }
       }
 
-      const adminStats = calcCompletions(adminSongMap, adminRatedIds)
+      const adminStats = calcCompletions(adminRatedIds)
 
       let userStats = null
       if (user.id !== adminProfile.id) {
         const { data: userRatingsData } = await supabase.from('ratings').select('song_id').eq('user_id', user.id).limit(1000000)
         const userRatedIds = new Set((userRatingsData || []).map(r => r.song_id))
-        const userSongMap = buildSongMap(userRatedIds)
-        userStats = calcCompletions(userSongMap, userRatedIds)
+        userStats = calcCompletions(userRatedIds)
       }
 
       setStats({ totalArtists, totalAlbums, totalSongs, admin: adminStats, user: userStats })
