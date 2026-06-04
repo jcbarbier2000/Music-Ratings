@@ -17,6 +17,7 @@ export const COUNTRIES = {
   VN: 'Vietnam', YE: 'Yemen', ZW: 'Zimbabwe',
   // Custom aliases
   EN: 'England',
+  SC: 'Scotland',
 }
 
 export const getCountryName = (code) => {
@@ -27,6 +28,7 @@ export const getCountryName = (code) => {
 export const getFlagUrl = (code) => {
   if (!code || code.length < 2) return null
   // Map custom aliases to real ISO codes for flags
-  const flagCode = code.toUpperCase() === 'EN' ? 'gb-eng' : code.toLowerCase()
+  const upper = code.toUpperCase()
+  const flagCode = upper === 'EN' ? 'gb-eng' : upper === 'SC' ? 'gb-sct' : code.toLowerCase()
   return `https://flagcdn.com/24x18/${flagCode}.png`
 }

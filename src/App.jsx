@@ -1538,7 +1538,7 @@ export default function App() {
               </div>
               <div>
                 <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">
-                  Country Code <span className="text-zinc-600 normal-case tracking-normal">(2-letter, e.g. US, CA, GB)</span>
+                  Country Code <span className="text-zinc-600 normal-case tracking-normal">(2-letter, e.g. US, CA, GB — use EN / SC for England / Scotland)</span>
                 </label>
                 <div className="flex items-center gap-3">
                   <input value={editCountry} onChange={e => setEditCountry(e.target.value.slice(0, 2))} placeholder="e.g. CA"
