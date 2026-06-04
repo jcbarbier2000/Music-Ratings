@@ -160,6 +160,12 @@ export default function App() {
       const totalAlbums = filteredAlbums.length
       const filteredAlbumIds = new Set(filteredAlbums.map(a => a.id))
 
+      // allAlbumToArtist covers every album for song dedup (matches artist page which counts
+      // songs across all albums including singles/features/etc.)
+      const allAlbumToArtist = {}
+      allAlbums.forEach(a => { allAlbumToArtist[a.id] = a.artist_id })
+
+      // albumToArtist covers only filtered albums for album completion tracking
       const albumToArtist = {}
       filteredAlbums.forEach(a => { albumToArtist[a.id] = a.artist_id })
 
@@ -169,7 +175,7 @@ export default function App() {
         const map = {}
         allSongs.forEach(s => {
           if (s.excluded) return
-          const artistId = albumToArtist[s.album_id]
+          const artistId = allAlbumToArtist[s.album_id]
           if (!artistId) return
           if (!map[artistId]) map[artistId] = {}
           const key = s.name.toLowerCase().trim()
