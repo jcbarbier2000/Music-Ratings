@@ -897,7 +897,10 @@ export default function App() {
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filtered.map(artist => {
+              {(() => {
+                const newestId = artists.reduce((best, a) =>
+                  !best || a.created_at > best.created_at ? a : best, null)?.id
+                return filtered.map(artist => {
                 const scores = artistScores[artist.id]
                 const myScore = scores?.myScore
                 const compareScore = scores?.compareScore
@@ -920,6 +923,9 @@ export default function App() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="font-semibold text-white group-hover:text-violet-300 transition-colors truncate">{artist.name}</div>
+                          {artist.id === newestId && (
+                            <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30">✦ New</span>
+                          )}
                           {newMusicArtistIds.has(artist.id) && (
                             <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">New Music</span>
                           )}
@@ -989,7 +995,8 @@ export default function App() {
                     </div>
                   </button>
                 )
-              })}
+              })
+              })()}
             </div>
 
             {filtered.length === 0 && (
