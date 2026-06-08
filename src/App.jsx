@@ -772,17 +772,23 @@ export default function App() {
         {/* HOME */}
         {page === 'home' && (
           <div className="space-y-8">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold text-white">Collection</h1>
-                <p className="text-zinc-500 text-sm mt-1">{artists.length} artists</p>
+            {/* Hero */}
+            <div className="relative rounded-3xl overflow-hidden border border-zinc-800 bg-zinc-900 p-6 sm:p-8">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(139,92,246,0.18),transparent_60%)] pointer-events-none" />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(99,102,241,0.1),transparent_60%)] pointer-events-none" />
+              <div className="relative flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">Collection</h1>
+                  <p className="text-zinc-400 text-sm mt-2 max-w-md">Browse the collection, explore albums, and see how artists stack up against each other.</p>
+                  <p className="text-zinc-600 text-xs mt-2">All data sourced from Spotify · No live albums · {artists.length} artists</p>
+                </div>
+                {isAdmin && (
+                  <button onClick={() => setShowImport(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors">
+                    <Upload className="w-4 h-4" />Import CSV
+                  </button>
+                )}
               </div>
-              {isAdmin && (
-                <button onClick={() => setShowImport(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors">
-                  <Upload className="w-4 h-4" />Import CSV
-                </button>
-              )}
             </div>
 
             {/* Welcome note */}
@@ -828,7 +834,7 @@ export default function App() {
 
             {/* Stats panel */}
             {stats && (
-              <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5 space-y-5">
+              <div className="bg-gradient-to-br from-violet-950/20 to-zinc-900/80 border border-zinc-800 rounded-2xl p-5 space-y-5">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-violet-400" />
                   <span className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Collection Stats</span>
@@ -906,14 +912,15 @@ export default function App() {
                 return (
                   <button key={artist.id}
                     onClick={() => { setSelectedArtist(artist); setPage('artist') }}
-                    className="bg-zinc-900 border border-zinc-800 hover:border-violet-500/60 rounded-2xl p-4 text-left transition-all group">
+                    className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left transition-all duration-200 group hover:shadow-xl hover:shadow-black/50 hover:-translate-y-px"
+                    style={myScore ? { borderLeftColor: scoreColor(myScore), borderLeftWidth: '3px' } : {}}>
                     <div className="flex items-center gap-4">
                       {artist.image_url ? (
                         <img src={artist.image_url} alt={artist.name}
-                          className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-zinc-700" />
+                          className="w-16 h-16 rounded-xl object-cover flex-shrink-0 border border-zinc-700 group-hover:border-zinc-500 transition-colors" />
                       ) : (
-                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-600/20 to-indigo-600/20 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
-                          <Music className="w-6 h-6 text-violet-400" />
+                        <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-violet-600/20 to-indigo-600/20 border border-violet-500/20 flex items-center justify-center flex-shrink-0">
+                          <Music className="w-7 h-7 text-violet-400" />
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
@@ -1266,7 +1273,7 @@ export default function App() {
                   return (
                     <div key={album.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
                       <div
-                        className="bg-zinc-800/50 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 border-b border-zinc-800 cursor-pointer hover:bg-zinc-800/80 transition-colors select-none"
+                        className="bg-gradient-to-r from-zinc-800/70 to-zinc-900/40 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 border-b border-zinc-800 cursor-pointer hover:from-zinc-800 hover:to-zinc-800/60 transition-all select-none"
                         onClick={() => toggleAlbum(album.id)}
                       >
                         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
