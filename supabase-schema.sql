@@ -247,3 +247,16 @@ create policy "Site requests viewable by all" on public.site_requests for select
 create policy "Users can insert site requests" on public.site_requests for insert with check (auth.uid() = requested_by);
 create policy "Admins can update site requests" on public.site_requests for update using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
 create policy "Admins can delete site requests" on public.site_requests for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+
+-- Live shows (how many times a user has seen an artist live)
+create table if not exists public.live_shows (
+  user_id uuid references auth.users(id) on delete cascade not null,
+  artist_id uuid references public.artists(id) on delete cascade not null,
+  count integer not null default 1 check (count > 0),
+  primary key (user_id, artist_id)
+);
+alter table public.live_shows enable row level security;
+create policy "Live shows viewable by all" on public.live_shows for select using (true);
+create policy "Users can insert their own live shows" on public.live_shows for insert with check (auth.uid() = user_id);
+create policy "Users can update their own live shows" on public.live_shows for update using (auth.uid() = user_id);
+create policy "Users can delete their own live shows" on public.live_shows for delete using (auth.uid() = user_id);
