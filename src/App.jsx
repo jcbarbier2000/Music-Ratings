@@ -791,12 +791,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Welcome note */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-1.5">
-              <p className="text-white text-sm leading-relaxed">Welcome to my music ratings site! Browse the collection, explore albums, and see how artists stack up against each other.</p>
-              <p className="text-zinc-500 text-xs">Note: All data is according to Spotify. No live albums.</p>
-            </div>
-
             {/* Currently in review / on deck banner */}
             {(siteSettings.artist_in_review || siteSettings.artist_on_deck || isAdmin) && (
               <div className="bg-gradient-to-r from-violet-900/30 to-indigo-900/20 border border-violet-800/30 rounded-2xl p-5">
@@ -903,7 +897,10 @@ export default function App() {
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filtered.map(artist => {
+              {(() => {
+                const newestId = artists.reduce((best, a) =>
+                  !best || a.created_at > best.created_at ? a : best, null)?.id
+                return filtered.map(artist => {
                 const scores = artistScores[artist.id]
                 const myScore = scores?.myScore
                 const compareScore = scores?.compareScore
@@ -926,6 +923,9 @@ export default function App() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="font-semibold text-white group-hover:text-violet-300 transition-colors truncate">{artist.name}</div>
+                          {artist.id === newestId && (
+                            <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30">✦ New</span>
+                          )}
                           {newMusicArtistIds.has(artist.id) && (
                             <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">New Music</span>
                           )}
@@ -995,7 +995,8 @@ export default function App() {
                     </div>
                   </button>
                 )
-              })}
+              })
+              })()}
             </div>
 
             {filtered.length === 0 && (
