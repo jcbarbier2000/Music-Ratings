@@ -35,6 +35,8 @@ export default function App() {
   const [editingAlbum, setEditingAlbum] = useState(null)
   const [editAlbumName, setEditAlbumName] = useState('')
   const [editAlbumYear, setEditAlbumYear] = useState('')
+  const [editAlbumGenre, setEditAlbumGenre] = useState('')
+  const [editAlbumSubgenre, setEditAlbumSubgenre] = useState('')
   const [editAlbumImageUrl, setEditAlbumImageUrl] = useState('')
   const [newSongName, setNewSongName] = useState('')
   const [editingSongId, setEditingSongId] = useState(null)
@@ -624,6 +626,8 @@ export default function App() {
     setEditingAlbum(album)
     setEditAlbumName(album.name)
     setEditAlbumYear(album.year || '')
+    setEditAlbumGenre(album.genre || '')
+    setEditAlbumSubgenre(album.subgenre || '')
     setEditAlbumImageUrl(album.image_url || '')
     setShowEditAlbum(true)
   }
@@ -632,6 +636,8 @@ export default function App() {
     const updates = {
       name: editAlbumName.trim() || editingAlbum.name,
       year: editAlbumYear.trim() || null,
+      genre: editAlbumGenre.trim() || null,
+      subgenre: editAlbumSubgenre.trim() || null,
       image_url: editAlbumImageUrl || null,
     }
     await supabase.from('albums').update(updates).eq('id', editingAlbum.id)
@@ -1469,6 +1475,26 @@ export default function App() {
                 <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">Year</label>
                 <input value={editAlbumYear} onChange={e => setEditAlbumYear(e.target.value)} placeholder="e.g. 1997"
                   className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">Genre</label>
+                  <input value={editAlbumGenre} onChange={e => setEditAlbumGenre(e.target.value)} placeholder="e.g. Rock"
+                    list="album-genres"
+                    className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  <datalist id="album-genres">
+                    {[...new Set(artists.map(a => a.genre).filter(Boolean))].sort().map(g => <option key={g} value={g} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 uppercase tracking-widest mb-2">Subgenre</label>
+                  <input value={editAlbumSubgenre} onChange={e => setEditAlbumSubgenre(e.target.value)} placeholder="e.g. Indie Rock"
+                    list="album-subgenres"
+                    className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  <datalist id="album-subgenres">
+                    {[...new Set(artists.map(a => a.subgenre).filter(Boolean))].sort().map(g => <option key={g} value={g} />)}
+                  </datalist>
+                </div>
               </div>
               <ImageUpload bucket="album-images" existingUrl={editAlbumImageUrl} onUpload={url => setEditAlbumImageUrl(url || '')} label="Album Cover" />
 
