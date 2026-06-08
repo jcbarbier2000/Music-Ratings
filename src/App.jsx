@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Minus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar, Users, Trophy, Check, Ticket } from 'lucide-react'
+import { Music, Home, TrendingUp, Disc, ListMusic, Plus, Minus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar, Users, Trophy, Check, Ticket } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './hooks/useAuth'
 import Login from './components/Login'
@@ -10,6 +10,7 @@ import ImageUpload from './components/ImageUpload'
 import ResetPassword from './components/ResetPassword'
 import MonthlyPicks from './components/MonthlyPicks'
 import Requests from './components/Requests'
+import HomeFilters, { getDecade } from './components/HomeFilters'
 import TopTen from './components/TopTen'
 import { getCountryName, getFlagUrl } from './lib/countries'
 
@@ -23,6 +24,7 @@ export default function App() {
   const [adminRatings, setAdminRatings] = useState({})
   const [adminProfile, setAdminProfile] = useState(undefined)
   const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState({ genre: '', subgenre: '', country: '', decade: '', minScore: '', seenLive: false, newMusic: false, sortBy: 'az' })
   const [dataLoading, setDataLoading] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showAddAlbum, setShowAddAlbum] = useState(false)
@@ -672,11 +674,33 @@ export default function App() {
   const NON_ALBUM_LABELS = ['singles', 'features', 'b-sides', 'eps', 'live', 'demos', 'rarities', 'extras', 'other']
   const albumCount = (albums) => (albums || []).filter(a => !NON_ALBUM_LABELS.includes(a.name.toLowerCase().trim())).length
 
-  const filtered = artists.filter(a =>
-    a.name.toLowerCase().includes(search.toLowerCase()) ||
-    (a.genre || '').toLowerCase().includes(search.toLowerCase()) ||
-    (a.subgenre || '').toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = (() => {
+    const q = search.toLowerCase()
+    let list = artists.filter(a =>
+      (!q || a.name.toLowerCase().includes(q) ||
+        (a.genre || '').toLowerCase().includes(q) ||
+        (a.subgenre || '').toLowerCase().includes(q)) &&
+      (!filters.genre || a.genre === filters.genre) &&
+      (!filters.subgenre || a.subgenre === filters.subgenre) &&
+      (!filters.country || a.country === filters.country) &&
+      (!filters.decade || getDecade(a.debut_year) === filters.decade) &&
+      (!filters.minScore || (artistScores[a.id]?.myScore || 0) >= parseFloat(filters.minScore)) &&
+      (!filters.seenLive || (liveShowCounts[a.id] || 0) > 0) &&
+      (!filters.newMusic || newMusicArtistIds.has(a.id))
+    )
+    return list.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'za': return b.name.localeCompare(a.name)
+        case 'score_desc': return (artistScores[b.id]?.myScore || 0) - (artistScores[a.id]?.myScore || 0)
+        case 'score_asc': return (artistScores[a.id]?.myScore || 0) - (artistScores[b.id]?.myScore || 0)
+        case 'tens_desc': return (artistScores[b.id]?.myTens || 0) - (artistScores[a.id]?.myTens || 0)
+        case 'live_desc': return (liveShowCounts[b.id] || 0) - (liveShowCounts[a.id] || 0)
+        case 'year_asc': return (parseInt(a.debut_year) || 9999) - (parseInt(b.debut_year) || 9999)
+        case 'year_desc': return (parseInt(b.debut_year) || 0) - (parseInt(a.debut_year) || 0)
+        default: return a.name.localeCompare(b.name)
+      }
+    })
+  })()
 
   if (window.location.pathname === '/reset-password') {
     return <ResetPassword />
@@ -848,28 +872,16 @@ export default function App() {
               </div>
             )}
 
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search artists, genres..."
-                className="w-full pl-11 pr-4 py-3 bg-zinc-900 border border-zinc-800 text-white placeholder-zinc-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            </div>
-
-            {Object.keys(genreStats).length > 0 && (
-              <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp className="w-4 h-4 text-violet-400" />
-                  <span className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Genres</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(genreStats).sort((a, b) => b[1] - a[1]).map(([genre, count]) => (
-                    <div key={genre} className="flex items-center gap-2 bg-zinc-800 px-3 py-1.5 rounded-lg">
-                      <span className="text-sm text-zinc-300">{genre}</span>
-                      <span className="text-xs font-bold text-violet-400">{count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <HomeFilters
+              artists={artists}
+              artistScores={artistScores}
+              liveShowCounts={liveShowCounts}
+              newMusicArtistIds={newMusicArtistIds}
+              filters={filters}
+              setFilters={setFilters}
+              search={search}
+              setSearch={setSearch}
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {filtered.map(artist => {
