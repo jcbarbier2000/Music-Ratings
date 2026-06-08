@@ -395,10 +395,15 @@ export default function App() {
     const current = liveShowCounts[artistId] || 0
     const next = Math.max(0, current + delta)
     setLiveShowCounts(prev => ({ ...prev, [artistId]: next }))
+    let err
     if (next === 0) {
-      await supabase.from('live_shows').delete().eq('user_id', user.id).eq('artist_id', artistId)
+      ;({ error: err } = await supabase.from('live_shows').delete().eq('user_id', user.id).eq('artist_id', artistId))
     } else {
-      await supabase.from('live_shows').upsert({ user_id: user.id, artist_id: artistId, count: next })
+      ;({ error: err } = await supabase.from('live_shows').upsert({ user_id: user.id, artist_id: artistId, count: next }))
+    }
+    if (err) {
+      setLiveShowCounts(prev => ({ ...prev, [artistId]: current }))
+      alert('Could not save — make sure the live_shows table exists in Supabase.\n\n' + err.message)
     }
   }
 
