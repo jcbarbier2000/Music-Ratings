@@ -347,6 +347,11 @@ export default function Requests({ isAdmin, user, profile }) {
         ))}
       </div>
 
+      {/* Artist requests note */}
+      {activeTab === 'artist' && (
+        <p className="text-zinc-500 text-sm">Note: Artists are selected randomly — submitting a request does not guarantee a specific order.</p>
+      )}
+
       {/* Status filter */}
       <div className="flex gap-2 flex-wrap">
         {['all', 'pending', 'approved', 'declined'].map(f => (
