@@ -687,7 +687,7 @@ export default function App() {
         (a.subgenre || '').toLowerCase().includes(q)) &&
       (!filters.genre || a.genre === filters.genre) &&
       (!filters.subgenre || a.subgenre === filters.subgenre) &&
-      (!filters.country || a.country === filters.country) &&
+      (!filters.country || a.country?.toUpperCase() === filters.country) &&
       (!filters.decade || getDecade(a.debut_year) === filters.decade) &&
       (!filters.minScore || (artistScores[a.id]?.myScore || 0) >= parseFloat(filters.minScore)) &&
       (!filters.seenLive || (liveShowCounts[a.id] || 0) > 0) &&
