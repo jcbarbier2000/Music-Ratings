@@ -1350,8 +1350,7 @@ export default function App() {
             user={user}
             profile={profile}
             artists={artists}
-            artistScores={artistScores}
-            liveShowCounts={liveShowCounts}
+            allProfiles={allProfiles}
           />
         )}
       </main>
