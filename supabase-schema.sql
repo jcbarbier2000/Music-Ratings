@@ -194,3 +194,56 @@ $$;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ============================================================
+-- Request tables
+-- ============================================================
+
+-- Artist requests
+create table if not exists public.artist_requests (
+  id uuid primary key default gen_random_uuid(),
+  requested_by uuid references auth.users(id) on delete cascade not null,
+  username text not null,
+  artist_name text not null,
+  notes text,
+  status text default 'pending' check (status in ('pending', 'approved', 'declined')),
+  created_at timestamptz default now()
+);
+alter table public.artist_requests enable row level security;
+create policy "Artist requests viewable by all" on public.artist_requests for select using (true);
+create policy "Users can insert artist requests" on public.artist_requests for insert with check (auth.uid() = requested_by);
+create policy "Admins can update artist requests" on public.artist_requests for update using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+create policy "Admins can delete artist requests" on public.artist_requests for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+
+-- Re-rate requests
+create table if not exists public.rerate_requests (
+  id uuid primary key default gen_random_uuid(),
+  requested_by uuid references auth.users(id) on delete cascade not null,
+  username text not null,
+  artist_name text not null,
+  album_name text not null,
+  notes text,
+  status text default 'pending' check (status in ('pending', 'approved', 'declined')),
+  created_at timestamptz default now()
+);
+alter table public.rerate_requests enable row level security;
+create policy "Rerate requests viewable by all" on public.rerate_requests for select using (true);
+create policy "Users can insert rerate requests" on public.rerate_requests for insert with check (auth.uid() = requested_by);
+create policy "Admins can update rerate requests" on public.rerate_requests for update using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+create policy "Admins can delete rerate requests" on public.rerate_requests for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+
+-- Site requests
+create table if not exists public.site_requests (
+  id uuid primary key default gen_random_uuid(),
+  requested_by uuid references auth.users(id) on delete cascade not null,
+  username text not null,
+  title text not null,
+  description text,
+  status text default 'pending' check (status in ('pending', 'approved', 'declined')),
+  created_at timestamptz default now()
+);
+alter table public.site_requests enable row level security;
+create policy "Site requests viewable by all" on public.site_requests for select using (true);
+create policy "Users can insert site requests" on public.site_requests for insert with check (auth.uid() = requested_by);
+create policy "Admins can update site requests" on public.site_requests for update using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
+create policy "Admins can delete site requests" on public.site_requests for delete using (exists (select 1 from public.profiles where id = auth.uid() and is_admin = true));
