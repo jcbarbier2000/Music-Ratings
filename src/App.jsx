@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar, Users, Trophy, Check } from 'lucide-react'
+import { Music, Home, Search, TrendingUp, Disc, ListMusic, Plus, Minus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar, Users, Trophy, Check, Ticket } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './hooks/useAuth'
 import Login from './components/Login'
@@ -58,6 +58,7 @@ export default function App() {
   const [artistScores, setArtistScores] = useState({}) // artistId -> { myScore, compareScore }
   const [newPickTitles, setNewPickTitles] = useState({ songs: new Set(), albums: new Set() })
   const [newMusicArtistIds, setNewMusicArtistIds] = useState(new Set())
+  const [liveShowCounts, setLiveShowCounts] = useState({})
 
   // Scroll to top button visibility
   useEffect(() => {
@@ -377,6 +378,27 @@ export default function App() {
     supabase.from('monthly_picks').select('artist_id').eq('month', month).not('artist_id', 'is', null)
       .then(({ data }) => setNewMusicArtistIds(new Set((data || []).map(p => p.artist_id))))
   }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    supabase.from('live_shows').select('artist_id, count').eq('user_id', user.id)
+      .then(({ data }) => {
+        const map = {}
+        ;(data || []).forEach(r => { map[r.artist_id] = r.count })
+        setLiveShowCounts(map)
+      })
+  }, [user])
+
+  const updateLiveCount = async (artistId, delta) => {
+    const current = liveShowCounts[artistId] || 0
+    const next = Math.max(0, current + delta)
+    setLiveShowCounts(prev => ({ ...prev, [artistId]: next }))
+    if (next === 0) {
+      await supabase.from('live_shows').delete().eq('user_id', user.id).eq('artist_id', artistId)
+    } else {
+      await supabase.from('live_shows').upsert({ user_id: user.id, artist_id: artistId, count: next })
+    }
+  }
 
   const loadArtistDetail = useCallback(async (artist) => {
     setDataLoading(true)
@@ -875,6 +897,11 @@ export default function App() {
                           {newMusicArtistIds.has(artist.id) && (
                             <span className="flex-shrink-0 text-xs font-bold px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300 border border-violet-500/30">New Music</span>
                           )}
+                          {(liveShowCounts[artist.id] || 0) > 0 && (
+                            <span className="flex-shrink-0 flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              <Ticket className="w-3 h-3" />{liveShowCounts[artist.id]}
+                            </span>
+                          )}
                         </div>
                         {artist.genre && (
                           <div className="text-xs text-zinc-500 truncate mt-0.5">
@@ -992,6 +1019,28 @@ export default function App() {
                       <span className="flex items-center gap-1"><ListMusic className="w-3 h-3 sm:w-3.5 sm:h-3.5" />{
                         new Set(artistDetail?.albums.flatMap(a => a.songs.filter(s => !s.excluded).map(s => s.name.toLowerCase().trim()))).size || 0
                       } songs</span>
+                    </div>
+                    {/* Live shows counter */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <Ticket className="w-3.5 h-3.5 text-zinc-500" />
+                      {(liveShowCounts[selectedArtist.id] || 0) === 0 ? (
+                        <span className="text-xs text-zinc-600">Never seen live</span>
+                      ) : (
+                        <span className="text-xs text-zinc-400">
+                          Seen live <span className="text-white font-semibold">{liveShowCounts[selectedArtist.id]}</span> {liveShowCounts[selectedArtist.id] === 1 ? 'time' : 'times'}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1 ml-1">
+                        <button onClick={() => updateLiveCount(selectedArtist.id, -1)}
+                          disabled={(liveShowCounts[selectedArtist.id] || 0) === 0}
+                          className="w-5 h-5 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <button onClick={() => updateLiveCount(selectedArtist.id, 1)}
+                          className="w-5 h-5 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors">
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
                     {/* Artist scores */}
                     {artistScores[selectedArtist.id] && (
