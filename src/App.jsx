@@ -1148,10 +1148,16 @@ export default function App() {
 
             {/* Tabs */}
             {artistDetail && (() => {
+              const seenNames = new Set()
               const tens = artistDetail.albums.flatMap(album =>
                 album.songs.filter(s => !s.excluded && (userRatings[s.id] || userRatings.__nameMap?.[s.name.toLowerCase().trim()]) === 10)
                   .map(s => ({ ...s, albumName: album.name, albumYear: album.year, albumImage: album.image_url }))
-              )
+              ).filter(s => {
+                const key = s.name.toLowerCase().trim()
+                if (seenNames.has(key)) return false
+                seenNames.add(key)
+                return true
+              })
               return (
                 <div className="flex items-center gap-1 border-b border-zinc-800 -mb-1">
                   <button
@@ -1175,10 +1181,16 @@ export default function App() {
 
             {/* Tens tab content */}
             {artistTab === 'tens' && artistDetail && (() => {
+              const seenNames = new Set()
               const tens = artistDetail.albums.flatMap(album =>
                 album.songs.filter(s => !s.excluded && (userRatings[s.id] || userRatings.__nameMap?.[s.name.toLowerCase().trim()]) === 10)
                   .map(s => ({ ...s, albumName: album.name, albumYear: album.year, albumImage: album.image_url }))
-              )
+              ).filter(s => {
+                const key = s.name.toLowerCase().trim()
+                if (seenNames.has(key)) return false
+                seenNames.add(key)
+                return true
+              })
               if (!tens.length) return (
                 <div className="text-center py-16 text-zinc-600 text-sm">No 10-rated songs yet</div>
               )
