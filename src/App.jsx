@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Music, Home, TrendingUp, Disc, ListMusic, Plus, Minus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar, Users, Trophy, Check, Ticket } from 'lucide-react'
+import { Music, Home, TrendingUp, Disc, ListMusic, Plus, Minus, Trash2, LogOut, Upload, ChevronLeft, X, Pencil, ChevronDown, ChevronUp, ArrowUp, Calendar, Users, Trophy, Check, Ticket, BarChart2 } from 'lucide-react'
 import { supabase } from './lib/supabase'
 import { useAuth } from './hooks/useAuth'
 import Login from './components/Login'
@@ -12,7 +12,9 @@ import MonthlyPicks from './components/MonthlyPicks'
 import Requests from './components/Requests'
 import HomeFilters, { getDecade } from './components/HomeFilters'
 import TopTen from './components/TopTen'
+import Stats from './components/Stats'
 import { getCountryName, getFlagUrl } from './lib/countries'
+import { scoreColor } from './lib/scoreColor'
 
 export default function App() {
   const { user, profile, isAdmin, loading, signIn, signUp, signOut, resetPassword } = useAuth()
@@ -91,7 +93,8 @@ export default function App() {
     window.location.pathname.match(/^\/artist\/(.+)$/)?.[1] ||
     (window.location.pathname === '/monthly' ? 'monthly' : null) ||
     (window.location.pathname === '/topten' ? 'topten' : null) ||
-    (window.location.pathname === '/requests' ? 'requests' : null)
+    (window.location.pathname === '/requests' ? 'requests' : null) ||
+    (window.location.pathname === '/stats' ? 'stats' : null)
   )
 
   // Sync page state to URL
@@ -103,6 +106,8 @@ export default function App() {
       window.history.replaceState(null, '', '/monthly')
     } else if (page === 'topten') {
       window.history.replaceState(null, '', '/topten')
+    } else if (page === 'stats') {
+      window.history.replaceState(null, '', '/stats')
     } else if (page === 'requests') {
       window.history.replaceState(null, '', '/requests')
     } else {
@@ -114,7 +119,7 @@ export default function App() {
   useEffect(() => {
     if (!pendingSlugRef.current) return
     const slug = pendingSlugRef.current
-    if (['monthly', 'topten', 'requests'].includes(slug)) {
+    if (['monthly', 'topten', 'requests', 'stats'].includes(slug)) {
       pendingSlugRef.current = null
       setPage(slug)
       return
@@ -242,22 +247,6 @@ export default function App() {
   useEffect(() => {
     if (user && adminProfile) loadStats()
   }, [user, adminProfile, loadStats])
-
-  // Red → yellow → green gradient based on score 0-10
-  const scoreColor = (score) => {
-    if (!score) return '#52525b'
-    const s = Math.min(10, Math.max(0, score))
-    // 0-5: red to yellow, 5-10: yellow to green
-    if (s <= 5) {
-      const r = 220
-      const g = Math.round((s / 5) * 200)
-      return `rgb(${r}, ${g}, 30)`
-    } else {
-      const r = Math.round(220 - ((s - 5) / 5) * 180)
-      const g = Math.round(160 + ((s - 5) / 5) * 60)
-      return `rgb(${r}, ${g}, 30)`
-    }
-  }
 
   const loadArtistScores = useCallback(async (myUserId, compareUserId) => {
     if (!myUserId) return
@@ -753,6 +742,11 @@ export default function App() {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${page === 'topten' ? 'bg-violet-600 text-white' : 'text-zinc-400 hover:text-white'}`}>
               <Trophy className="w-4 h-4" />
               <span className="hidden sm:inline">Top 10</span>
+            </button>
+            <button onClick={() => setPage('stats')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${page === 'stats' ? 'bg-violet-600 text-white' : 'text-zinc-400 hover:text-white'}`}>
+              <BarChart2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Stats</span>
             </button>
             <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 rounded-lg">
               <span className="text-sm text-zinc-300 font-medium">{profile?.username}</span>
@@ -1347,6 +1341,17 @@ export default function App() {
               setSelectedArtist(artist)
               setPage('artist')
             }}
+          />
+        )}
+
+        {/* STATS PAGE */}
+        {page === 'stats' && (
+          <Stats
+            user={user}
+            profile={profile}
+            artists={artists}
+            artistScores={artistScores}
+            liveShowCounts={liveShowCounts}
           />
         )}
       </main>
