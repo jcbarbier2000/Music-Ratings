@@ -65,6 +65,7 @@ export default function App() {
   const [newPickTitles, setNewPickTitles] = useState({ songs: new Set(), albums: new Set() })
   const [newMusicArtistIds, setNewMusicArtistIds] = useState(new Set())
   const [liveShowCounts, setLiveShowCounts] = useState({})
+  const [artistTab, setArtistTab] = useState('albums')
 
   // Scroll to top button visibility
   useEffect(() => {
@@ -477,6 +478,7 @@ export default function App() {
 
   useEffect(() => {
     if (selectedArtist && adminProfile !== undefined) loadArtistDetail(selectedArtist)
+    setArtistTab('albums')
   }, [selectedArtist, loadArtistDetail])
 
   useEffect(() => {
@@ -1144,8 +1146,66 @@ export default function App() {
               </div>
             )}
 
+            {/* Tabs */}
+            {artistDetail && (() => {
+              const tens = artistDetail.albums.flatMap(album =>
+                album.songs.filter(s => !s.excluded && (userRatings[s.id] || userRatings.__nameMap?.[s.name.toLowerCase().trim()]) === 10)
+                  .map(s => ({ ...s, albumName: album.name, albumYear: album.year, albumImage: album.image_url }))
+              )
+              return (
+                <div className="flex items-center gap-1 border-b border-zinc-800 -mb-1">
+                  <button
+                    onClick={() => setArtistTab('albums')}
+                    className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${artistTab === 'albums' ? 'border-violet-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+                  >
+                    Albums
+                  </button>
+                  <button
+                    onClick={() => setArtistTab('tens')}
+                    className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${artistTab === 'tens' ? 'border-violet-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+                  >
+                    Tens
+                    {tens.length > 0 && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${artistTab === 'tens' ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400'}`}>{tens.length}</span>
+                    )}
+                  </button>
+                </div>
+              )
+            })()}
+
+            {/* Tens tab content */}
+            {artistTab === 'tens' && artistDetail && (() => {
+              const tens = artistDetail.albums.flatMap(album =>
+                album.songs.filter(s => !s.excluded && (userRatings[s.id] || userRatings.__nameMap?.[s.name.toLowerCase().trim()]) === 10)
+                  .map(s => ({ ...s, albumName: album.name, albumYear: album.year, albumImage: album.image_url }))
+              )
+              if (!tens.length) return (
+                <div className="text-center py-16 text-zinc-600 text-sm">No 10-rated songs yet</div>
+              )
+              return (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                  <div className="divide-y divide-zinc-800/60">
+                    {tens.map(song => (
+                      <div key={song.id} className="flex items-center gap-4 px-5 py-3 hover:bg-zinc-800/30 transition-colors">
+                        {song.albumImage ? (
+                          <img src={song.albumImage} alt={song.albumName} className="w-9 h-9 rounded-lg object-cover border border-zinc-700 flex-shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-zinc-800 border border-zinc-700 flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white text-sm font-medium truncate">{song.name}</div>
+                          <div className="text-xs text-zinc-500 truncate">{song.albumName}{song.albumYear ? ` · ${song.albumYear}` : ''}</div>
+                        </div>
+                        <span className="text-amber-400 font-bold text-sm flex-shrink-0">10</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
             {/* Album controls */}
-            {artistDetail && artistDetail.albums.length > 0 && (
+            {artistTab === 'albums' && artistDetail && artistDetail.albums.length > 0 && (
               <div className="flex items-center justify-between">
                 {isAdmin && (
                   <button onClick={() => setShowAddAlbum(true)}
@@ -1167,7 +1227,7 @@ export default function App() {
               </div>
             )}
 
-            {!artistDetail?.albums.length && isAdmin && (
+            {artistTab === 'albums' && !artistDetail?.albums.length && isAdmin && (
               <div className="flex justify-end">
                 <button onClick={() => setShowAddAlbum(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors">
@@ -1176,7 +1236,7 @@ export default function App() {
               </div>
             )}
 
-            {dataLoading ? (
+            {artistTab === 'albums' && (dataLoading ? (
               <div className="text-center py-12 text-zinc-600">Loading...</div>
             ) : (
               <div className="space-y-3">
@@ -1309,7 +1369,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-            )}
+            ))}
           </div>
         )}
 
