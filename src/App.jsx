@@ -9,7 +9,7 @@ import ImportModal from './components/ImportModal'
 import ImageUpload from './components/ImageUpload'
 import ResetPassword from './components/ResetPassword'
 import MonthlyPicks from './components/MonthlyPicks'
-import ArtistRequests from './components/ArtistRequests'
+import Requests from './components/Requests'
 import TopTen from './components/TopTen'
 import { getCountryName, getFlagUrl } from './lib/countries'
 
@@ -1260,9 +1260,9 @@ export default function App() {
           />
         )}
 
-        {/* ARTIST REQUESTS PAGE */}
+        {/* REQUESTS PAGE */}
         {page === 'requests' && (
-          <ArtistRequests
+          <Requests
             isAdmin={isAdmin}
             user={user}
             profile={profile}
