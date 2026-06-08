@@ -70,7 +70,7 @@ export default function HomeFilters({ artists, artistScores, liveShowCounts, new
   // Derive available options from artist data
   const genres = [...new Set(artists.map(a => a.genre).filter(Boolean))].sort()
   const subgenres = [...new Set(artists.map(a => a.subgenre).filter(Boolean))].sort()
-  const countries = [...new Set(artists.map(a => a.country).filter(Boolean))]
+  const countries = [...new Set(artists.map(a => a.country?.toUpperCase()).filter(Boolean))]
     .sort((a, b) => getCountryName(a).localeCompare(getCountryName(b)))
   const decades = [...new Set(artists.map(a => getDecade(a.debut_year)).filter(Boolean))]
     .sort((a, b) => {
