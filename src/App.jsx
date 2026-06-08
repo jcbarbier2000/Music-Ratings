@@ -791,12 +791,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Welcome note */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-1.5">
-              <p className="text-white text-sm leading-relaxed">Welcome to my music ratings site! Browse the collection, explore albums, and see how artists stack up against each other.</p>
-              <p className="text-zinc-500 text-xs">Note: All data is according to Spotify. No live albums.</p>
-            </div>
-
             {/* Currently in review / on deck banner */}
             {(siteSettings.artist_in_review || siteSettings.artist_on_deck || isAdmin) && (
               <div className="bg-gradient-to-r from-violet-900/30 to-indigo-900/20 border border-violet-800/30 rounded-2xl p-5">
